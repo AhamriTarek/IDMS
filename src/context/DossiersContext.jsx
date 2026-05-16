@@ -15,7 +15,7 @@ export function DossiersProvider({ children }) {
     try {
       const { data } = await api.get('/dossiers/')
       const list = data.results ?? data
-      console.log('[DossiersContext] loaded', list.length, 'dossiers:', list.map(d => d.titre))
+      console.log('[DossiersContext] loaded', list.length, 'dossiers:', list.map(d => ({ id: d.id, titre: d.titre, has_resume: d.has_resume })))
       setDossiers(list)
     } catch (err) {
       console.warn('[DossiersContext] failed to load dossiers — status:', err?.response?.status)

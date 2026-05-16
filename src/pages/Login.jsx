@@ -3,14 +3,22 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
+const GOOGLE_CLIENT_ID    = import.meta.env.VITE_GOOGLE_CLIENT_ID    || ''
 const DJANGO_URL          = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const MICROSOFT_CLIENT_ID = import.meta.env.VITE_MICROSOFT_CLIENT_ID || ''
 const GITHUB_CLIENT_ID    = import.meta.env.VITE_GITHUB_CLIENT_ID    || ''
 const ORIGIN   = typeof window !== 'undefined' ? window.location.origin : ''
 const REDIRECT = `${ORIGIN}/auth/callback`
 
+// Google callback goes to Django (already authorized in Google Cloud Console).
+// The stateless view at /accounts/google/login/callback/ exchanges the code
+// and redirects to React with JWT — no allauth session state needed.
+const GOOGLE_DJANGO_CB = `${DJANGO_URL}/accounts/google/login/callback/`
+
 const oauthUrls = {
-  google:    `${DJANGO_URL}/accounts/google/login/`,
+  google: GOOGLE_CLIENT_ID
+    ? `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(GOOGLE_DJANGO_CB)}&response_type=code&scope=openid%20email%20profile&access_type=online&prompt=select_account`
+    : null,
   microsoft: MICROSOFT_CLIENT_ID
     ? `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${MICROSOFT_CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT)}&scope=openid%20email%20profile`
     : null,

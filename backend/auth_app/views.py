@@ -18,6 +18,61 @@ logger = logging.getLogger(__name__)
 GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 
 
+def google_oauth_callback(request):
+    """
+    Stateless Google OAuth callback registered BEFORE allauth URLs so it
+    shadows allauth's /accounts/google/login/callback/ without needing
+    any session-based state validation.
+    """
+    code  = request.GET.get('code')
+    error = request.GET.get('error')
+    frontend_cb = f"{settings.FRONTEND_URL}/auth/callback"
+
+    if error or not code:
+        return redirect(f"{settings.FRONTEND_URL}/?error=google_failed&detail={error or 'no_code'}")
+
+    redirect_uri = request.build_absolute_uri('/accounts/google/login/callback/')
+
+    try:
+        token_resp = requests.post(GOOGLE_TOKEN_URL, data={
+            'code':          code,
+            'client_id':     settings.GOOGLE_CLIENT_ID,
+            'client_secret': settings.GOOGLE_CLIENT_SECRET,
+            'redirect_uri':  redirect_uri,
+            'grant_type':    'authorization_code',
+        }, timeout=10)
+    except requests.RequestException:
+        return redirect(f"{settings.FRONTEND_URL}/?error=google_failed&detail=network")
+
+    if not token_resp.ok:
+        logger.error("Google token exchange failed: %s", token_resp.text)
+        return redirect(f"{settings.FRONTEND_URL}/?error=google_failed&detail=token_exchange")
+
+    id_token_str = token_resp.json().get('id_token')
+    if not id_token_str:
+        return redirect(f"{settings.FRONTEND_URL}/?error=google_failed&detail=no_id_token")
+
+    try:
+        id_info = id_token.verify_oauth2_token(
+            id_token_str, google_requests.Request(),
+            settings.GOOGLE_CLIENT_ID, clock_skew_in_seconds=10,
+        )
+    except ValueError as e:
+        logger.error("Invalid Google id_token: %s", e)
+        return redirect(f"{settings.FRONTEND_URL}/?error=google_failed&detail=invalid_token")
+
+    try:
+        user, _ = get_or_create_from_google(id_info)
+    except Exception:
+        logger.exception("google_oauth_callback: user creation failed")
+        return redirect(f"{settings.FRONTEND_URL}/?error=google_failed&detail=user_error")
+
+    refresh = RefreshToken.for_user(user)
+    return redirect(
+        f"{frontend_cb}?access={str(refresh.access_token)}&refresh={str(refresh)}"
+    )
+
+
 def _unique_username(base):
     username = base[:140]
     if not User.objects.filter(username=username).exists():

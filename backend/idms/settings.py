@@ -5,6 +5,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Fix SSL certificate verification on Windows — patches certifi to use the
+# Windows trusted CA store so requests to Google/external APIs work correctly.
+try:
+    import certifi_win32  # noqa: F401
+except ImportError:
+    pass
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'fallback-secret-key-change-in-production')
@@ -207,12 +214,18 @@ CELERY_TIMEZONE           = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT    = 300  # 5 min hard limit per task
 
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': REDIS_URL,
-    }
-}
+def _make_cache():
+    import socket
+    try:
+        from urllib.parse import urlparse
+        _u = urlparse(REDIS_URL)
+        s = socket.create_connection((_u.hostname, _u.port or 6379), timeout=1)
+        s.close()
+        return {'default': {'BACKEND': 'django.core.cache.backends.redis.RedisCache', 'LOCATION': REDIS_URL}}
+    except OSError:
+        return {'default': {'BACKEND': 'django.core.cache.backends.db.DatabaseCache', 'LOCATION': 'django_cache'}}
+
+CACHES = _make_cache()
 
 # ── File upload limits ────────────────────────────────────────────────────────
 MAX_FILE_SIZE_MB = int(os.environ.get('MAX_FILE_SIZE_MB', 50))

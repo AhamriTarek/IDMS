@@ -5,6 +5,7 @@ import Navbar from '../../components/Navbar'
 import EmptyState from '../../components/EmptyState'
 import { useDossiers } from '../../context/DossiersContext'
 import { employeAPI } from '../../services/employeAPI'
+import api from '../../api/axios'
 
 // acces string → { ajouter, supprimer }
 function accesToPerm(acces) {
@@ -21,6 +22,223 @@ function formatSize(bytes) {
 }
 
 const FILE_ICON = { pdf: '📄', docx: '📝', xlsx: '📊', image: '🖼️', autre: '📁' }
+
+// ── Shared modal helpers ──────────────────────────────────────────────────────
+
+function Spinner({ size = 18, color = 'var(--accent)' }) {
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%',
+      border: `2px solid rgba(0,212,255,0.15)`,
+      borderTop: `2px solid ${color}`,
+      animation: 'spin 0.8s linear infinite', flexShrink: 0,
+    }} />
+  )
+}
+
+function Overlay({ onClose, children }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 1000,
+      background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 14 }}
+        animate={{ opacity: 1, scale: 1,    y: 0  }}
+        exit={{    opacity: 0, scale: 0.95, y: 14 }}
+        transition={{ duration: 0.18 }}
+        style={{
+          width: '100%', maxWidth: 560,
+          background: 'var(--bg-raised)', border: '1px solid var(--border)',
+          borderRadius: 20, boxShadow: 'var(--shadow-xl)', overflow: 'hidden',
+          maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+        }}
+      >{children}</motion.div>
+    </div>
+  )
+}
+
+function ModalHeader({ title, onClose }) {
+  return (
+    <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+      <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</h3>
+      <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 20, lineHeight: 1, padding: '0 2px' }}>×</button>
+    </div>
+  )
+}
+
+// ── Resume Modal (read-only for employee) ─────────────────────────────────────
+
+function ResumeModal({ dossier, onClose }) {
+  const [state, setState]   = useState('loading') // loading | done | pending
+  const [result, setResult] = useState(null)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data } = await api.get(`/dossiers/${dossier.id}/resume-data/`)
+        if (cancelled) return
+        if (data.status === 'done' && data.data) {
+          setResult(data.data)
+          setState('done')
+        } else {
+          setState('pending')
+        }
+      } catch {
+        if (!cancelled) setState('pending')
+      }
+    })()
+    return () => { cancelled = true }
+  }, [dossier.id])
+
+  const toPlainText = () => {
+    if (!result) return ''
+    const lines = []
+    result.fichiers.forEach(f => {
+      lines.push(`📄 ${f.nom}`)
+      lines.push('─'.repeat(40))
+      f.points.forEach(p => lines.push(`  — ${p}`))
+      lines.push('')
+    })
+    if (result.synthese_globale) {
+      lines.push('═'.repeat(40))
+      lines.push('🔍 Synthèse Globale')
+      lines.push('═'.repeat(40))
+      lines.push(result.synthese_globale)
+    }
+    return lines.join('\n')
+  }
+
+  const copy = () => {
+    navigator.clipboard.writeText(toPlainText())
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const downloadPdf = () => {
+    if (!result) return
+    const filesHtml = result.fichiers.map(f => `
+      <div class="file">
+        <div class="file-name">📄 ${f.nom}</div>
+        <hr class="sep">
+        ${f.points.map(p => `<div class="point">— ${p}</div>`).join('')}
+      </div>`).join('')
+    const globalHtml = result.synthese_globale ? `
+      <div class="global">
+        <div class="global-rule"></div>
+        <div class="global-title">🔍 Synthèse Globale</div>
+        <div class="global-rule"></div>
+        <p class="global-text">${result.synthese_globale}</p>
+      </div>` : ''
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Synthèse — ${dossier.titre}</title>
+<style>
+  body{font-family:Georgia,serif;max-width:720px;margin:40px auto;color:#1a1a2e;line-height:1.7;font-size:14px}
+  h1{font-size:20px;border-bottom:2px solid #3B82F6;padding-bottom:8px;color:#1e3a5f}
+  .file{margin:28px 0}
+  .file-name{font-size:15px;font-weight:700;color:#1e3a5f;margin-bottom:4px}
+  .sep{border:none;border-top:1px solid #d1d5db;margin:6px 0 12px}
+  .point{margin:5px 0 5px 4px;color:#374151}
+  .global{margin-top:36px}
+  .global-rule{border:none;border-top:2px solid #94a3b8;margin:8px 0}
+  .global-title{font-size:15px;font-weight:700;color:#1e3a5f;text-align:center;margin:6px 0}
+  .global-text{color:#374151;margin:12px 0 0}
+  @media print{body{margin:20px}}
+</style></head><body>
+<h1>📋 Synthèse — ${dossier.titre}</h1>
+${filesHtml}${globalHtml}
+</body></html>`
+    const blob = new Blob([html], { type: 'text/html' })
+    const url  = URL.createObjectURL(blob)
+    const win  = window.open(url, '_blank')
+    if (win) win.addEventListener('load', () => { win.print(); URL.revokeObjectURL(url) })
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      <ModalHeader title={`Synthèse — ${dossier.titre}`} onClose={onClose} />
+      <div style={{ padding: '20px 22px', overflowY: 'auto', minHeight: 180, maxHeight: '60vh' }}>
+
+        {state === 'loading' && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '32px 0', color: 'var(--text-tertiary)', fontSize: 13 }}>
+            <Spinner size={28} />
+            <span>Chargement…</span>
+          </div>
+        )}
+
+        {state === 'pending' && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '32px 0', color: 'var(--text-tertiary)', fontSize: 13 }}>
+            <span style={{ fontSize: 22 }}>⏳</span>
+            <span>La synthèse n'est pas encore disponible.</span>
+          </div>
+        )}
+
+        {state === 'done' && result && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            {result.synthese_globale && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                  <span style={{ fontSize: 14 }}>🔍</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.02em' }}>Synthèse Globale</span>
+                </div>
+                <div style={{ height: 2, background: 'var(--border-mid)', marginBottom: 12, borderRadius: 1 }} />
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75 }}>
+                  {result.synthese_globale}
+                </p>
+              </div>
+            )}
+
+            {result.synthese_globale && result.fichiers.length > 0 && (
+              <div style={{ height: 1, background: 'var(--border)', borderRadius: 1 }} />
+            )}
+
+            {result.fichiers.map((f, fi) => (
+              <div key={fi}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
+                  <span style={{ fontSize: 14 }}>📄</span>
+                  <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>{f.nom}</span>
+                </div>
+                <div style={{ height: 1, background: 'var(--border)', marginBottom: 9 }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {(f.points || []).map((p, pi) => (
+                    <div key={pi} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+                      <span style={{ color: 'var(--text-tertiary)', fontSize: 12, marginTop: 2, flexShrink: 0, fontWeight: 500 }}>—</span>
+                      <span style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{p}</span>
+                    </div>
+                  ))}
+                  {(!f.points || f.points.length === 0) && (
+                    <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Aucun point extrait</span>
+                  )}
+                </div>
+              </div>
+            ))}
+
+          </div>
+        )}
+      </div>
+
+      {state === 'done' && (
+        <div style={{ padding: '12px 22px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, justifyContent: 'flex-end', flexShrink: 0 }}>
+          <button onClick={copy} className="btn-secondary" style={{ fontSize: 12 }}>
+            {copied ? 'Copié ✓' : 'Copier'}
+          </button>
+          <button onClick={downloadPdf} style={{
+            padding: '6px 14px', borderRadius: 8, border: '1px solid var(--border)',
+            background: 'var(--bg)', color: 'var(--text-secondary)',
+            fontSize: 12, fontWeight: 500, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            ↓ Télécharger PDF
+          </button>
+        </div>
+      )}
+    </Overlay>
+  )
+}
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 
@@ -104,6 +322,7 @@ export default function EmployeeDossiers() {
   const filesMapRef                             = useRef({})    // always-current ref for loadFiles closure
   const [loadingFiles, setLoadingFiles]         = useState({})
   const [soumModal, setSoumModal]               = useState(null)
+  const [resumeModal, setResumeModal]           = useState(null)
   const [toast, setToast]                       = useState(null)
   const [search, setSearch]                     = useState('')
 
@@ -199,6 +418,7 @@ export default function EmployeeDossiers() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {filtered.map((d, i) => {
+                console.log('[EmployeeDossiers] dossier', d.id, d.titre, 'has_resume=', d.has_resume)
                 const perm       = permsMap[d.id] || { ajouter: false, supprimer: false }
                 const isExpanded = expanded === d.id
                 const dFiles     = filesMap[d.id] || []
@@ -224,6 +444,7 @@ export default function EmployeeDossiers() {
                         {perm.ajouter  && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 99, background: '#d1fae5', color: '#065f46', fontWeight: 600 }}>✓ Ajouter</span>}
                         {perm.supprimer && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 99, background: '#fee2e2', color: '#991b1b', fontWeight: 600 }}>✓ Supprimer</span>}
                         {!perm.ajouter && !perm.supprimer && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 99, background: '#f3f4f6', color: '#6b7280', fontWeight: 600 }}>👁 Lecture seule</span>}
+                        {d.has_resume && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 99, background: 'rgba(139,92,246,0.12)', color: '#8B5CF6', fontWeight: 600, border: '1px solid rgba(139,92,246,0.25)' }}>🔍 Résumé</span>}
                       </div>
 
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}>
@@ -253,6 +474,14 @@ export default function EmployeeDossiers() {
                               onMouseLeave={e => { e.currentTarget.style.background = 'rgba(29,78,216,0.08)' }}>
                               📤 Soumettre au Admin
                             </button>
+                            {d.has_resume && (
+                              <button onClick={e => { e.stopPropagation(); setResumeModal(d) }}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 14px', borderRadius: 9, background: 'rgba(139,92,246,0.08)', color: '#8B5CF6', border: '1px solid rgba(139,92,246,0.2)', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' }}
+                                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.14)' }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.08)' }}>
+                                🔍 Résumer
+                              </button>
+                            )}
                           </div>
 
                           {/* Files */}
@@ -314,6 +543,9 @@ export default function EmployeeDossiers() {
         {soumModal && (
           <SoumissionModal dossier={soumModal} onClose={() => setSoumModal(null)}
             onSuccess={() => { setSoumModal(null); setToast({ message: 'Soumission envoyée avec succès ✓', type: 'success' }) }} />
+        )}
+        {resumeModal && (
+          <ResumeModal dossier={resumeModal} onClose={() => setResumeModal(null)} />
         )}
         {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
       </AnimatePresence>
