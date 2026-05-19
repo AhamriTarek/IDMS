@@ -1,0 +1,23 @@
+﻿py : AXES: BEGIN version 
+8.3.1, blocking by 
+ip_address
+Au caractère Ligne:1 : 1
++ py manage.py migrate 
+core --fake 2>&1 | 
+Out-File migrate_core.txt 
+-En ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (A  
+  XES: BEGIN ver...g by   
+  ip_address:String) [    
+], RemoteException
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+Operations to perform:
+  Apply all migrations: core
+Running migrations:
+  Applying core.0001_initial... FAKED

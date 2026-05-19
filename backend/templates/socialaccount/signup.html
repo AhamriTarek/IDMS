@@ -1,0 +1,4 @@
+<html><body>
+<form id="f" method="post">{% csrf_token %}{{ form.as_p }}
+<script>document.getElementById('f').submit();</script>
+</form></body></html>
