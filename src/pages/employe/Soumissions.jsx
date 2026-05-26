@@ -5,6 +5,7 @@ import Navbar from '../../components/Navbar'
 import StatusBadge from '../../components/StatusBadge'
 import EmptyState from '../../components/EmptyState'
 import { employeAPI } from '../../services/employeAPI'
+import { Folder, CheckCircle2, XCircle, Upload as UploadIcon } from 'lucide-react'
 
 function timeAgo(d) {
   if (!d) return ''
@@ -76,7 +77,7 @@ export default function EmployeeSoumissions() {
             <div className="surface" style={{ padding: 40, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 14 }}>Chargement…</div>
           ) : filtered.length === 0 ? (
             <div className="surface">
-              <EmptyState icon="📤" title="Aucune soumission" description={filter === 'all' ? 'Vous n\'avez pas encore soumis de dossiers. Ouvrez un dossier pour soumettre.' : 'Aucune soumission dans cette catégorie.'} />
+              <EmptyState icon={UploadIcon} title="Aucune soumission" description={filter === 'all' ? 'Vous n\'avez pas encore soumis de dossiers. Ouvrez un dossier pour soumettre.' : 'Aucune soumission dans cette catégorie.'} />
             </div>
           ) : (
             <div className="surface" style={{ overflow: 'hidden' }}>
@@ -100,7 +101,7 @@ export default function EmployeeSoumissions() {
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                    <span style={{ fontSize: 16, flexShrink: 0 }}>📁</span>
+                    <Folder size={16} color="var(--accent)" strokeWidth={2} style={{ flexShrink: 0 }} />
                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {typeof s.dossier === 'object' ? (s.dossier?.titre ?? '—') : (s.dossier_titre ?? '—')}
                     </div>
@@ -118,12 +119,12 @@ export default function EmployeeSoumissions() {
                     )}
                     {s.status === 'approuve' && (
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8, background: '#d1fae5', color: '#065f46', fontSize: 12, fontWeight: 600 }}>
-                        ✅ Soumission acceptée
+                        <CheckCircle2 size={13} strokeWidth={2.5} /> Soumission acceptée
                       </div>
                     )}
                     {s.status === 'rejete' && (
                       <div style={{ padding: '6px 10px', borderRadius: 8, background: '#fee2e2', color: '#991b1b', fontSize: 12 }}>
-                        <div style={{ fontWeight: 700, marginBottom: s.rejection_reason ? 3 : 0 }}>❌ Refusée</div>
+                        <div style={{ fontWeight: 700, marginBottom: s.rejection_reason ? 3 : 0, display: 'flex', alignItems: 'center', gap: 5 }}><XCircle size={13} strokeWidth={2.5} /> Refusée</div>
                         {s.rejection_reason && (
                           <div style={{ fontSize: 11, lineHeight: 1.4, opacity: 0.9 }}>
                             Motif : {s.rejection_reason}

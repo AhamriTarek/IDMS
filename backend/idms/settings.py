@@ -179,8 +179,8 @@ LOGIN_REDIRECT_URL              = '/auth/jwt-redirect/'  # after allauth success
 
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
-        # No 'APP' key here — credentials come from the SocialApp DB record.
-        # Having both APP in settings AND a DB SocialApp causes MultipleObjectsReturned.
+        # Credentials come from the SocialApp DB record (Django admin).
+        # Do NOT add an APP key here — having both causes MultipleObjectsReturned.
         'SCOPE': ['profile', 'email'],
         'AUTH_PARAMS': {'access_type': 'online'},
     }
@@ -199,7 +199,7 @@ ADMIN_EMAILS = [
 
 # ── AI — Google Gemini ────────────────────────────────────────────────────────
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
-GEMINI_MODEL   = 'gemini-flash-lite-latest'
+GEMINI_MODEL   = os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash')
 
 # ── Celery ────────────────────────────────────────────────────────────────────
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')

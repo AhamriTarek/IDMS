@@ -5,8 +5,9 @@ import Navbar from '../../components/Navbar'
 import StatusBadge from '../../components/StatusBadge'
 import EmptyState from '../../components/EmptyState'
 import { adminAPI } from '../../services/employeAPI'
+import { FileText, BarChart3, Image, Folder, CheckCircle2, XCircle, Clock, ListChecks, Eye, Download, Loader2 } from 'lucide-react'
 
-const FILE_ICON = { pdf: '📄', docx: '📝', xlsx: '📊', image: '🖼️', autre: '📁' }
+const FILE_ICON = { pdf: FileText, docx: FileText, xlsx: BarChart3, image: Image, autre: Folder }
 
 function timeAgo(d) {
   if (!d) return ''
@@ -48,7 +49,9 @@ function RefuseModal({ sub, onClose, onDone }) {
         style={{ width: '100%', maxWidth: 420, background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 18, boxShadow: 'var(--shadow-xl)', overflow: 'hidden' }}>
 
         <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(220,38,38,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>❌</div>
+          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(220,38,38,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <XCircle size={16} color="#dc2626" strokeWidth={2} />
+          </div>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Refuser la soumission</h3>
           <button onClick={onClose} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 22 }}>×</button>
         </div>
@@ -68,7 +71,7 @@ function RefuseModal({ sub, onClose, onDone }) {
             <button type="button" className="btn-secondary" onClick={onClose} style={{ flex: 1 }}>Annuler</button>
             <button type="submit" disabled={busy || !raison.trim()}
               style={{ flex: 2, padding: '10px 0', borderRadius: 9, border: 'none', background: '#dc2626', color: 'white', fontWeight: 600, fontSize: 14, cursor: busy || !raison.trim() ? 'not-allowed' : 'pointer', opacity: busy || !raison.trim() ? 0.65 : 1 }}>
-              {busy ? 'Refus…' : '❌ Confirmer le refus'}
+              {busy ? 'Refus…' : <><XCircle size={14} strokeWidth={2} style={{ verticalAlign: 'middle', marginRight: 5 }} />Confirmer le refus</>}
             </button>
           </div>
         </form>
@@ -159,7 +162,7 @@ function DetailPanel({ sub, onClose, onApprove, onRefuse }) {
             <div className="label" style={{ marginBottom: 10 }}>Dossier soumis</div>
             <div style={{ padding: '14px', background: 'var(--bg)', borderRadius: 12, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 18 }}>📁</span>
+                <Folder size={18} color="var(--accent)" strokeWidth={2} />
                 <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{dossierNom}</span>
               </div>
               {sub.commentaire ? (
@@ -194,7 +197,7 @@ function DetailPanel({ sub, onClose, onApprove, onRefuse }) {
                       onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-mid)'}
                       onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
 
-                      <span style={{ fontSize: 22, flexShrink: 0 }}>{FILE_ICON[f.type_fichier] ?? '📁'}</span>
+                      {(() => { const FIcon = FILE_ICON[f.type_fichier] ?? Folder; return <FIcon size={20} color="var(--text-tertiary)" strokeWidth={1.8} style={{ flexShrink: 0 }} /> })()}
 
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.nom || f.fichier?.split('/').pop()}</div>
@@ -209,7 +212,7 @@ function DetailPanel({ sub, onClose, onApprove, onRefuse }) {
                           onMouseEnter={e => { e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.color='var(--accent)' }}
                           onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.color='var(--text-secondary)' }}
                           title="Prévisualiser">
-                          👁 Voir
+                          <Eye size={13} strokeWidth={2} /> Voir
                         </button>
                       ) : (
                         <a href={f.fichier} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
@@ -217,7 +220,7 @@ function DetailPanel({ sub, onClose, onApprove, onRefuse }) {
                           onMouseEnter={e => { e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.color='var(--accent)' }}
                           onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.color='var(--text-secondary)' }}
                           title="Ouvrir dans un onglet">
-                          👁 Voir
+                          <Eye size={13} strokeWidth={2} /> Voir
                         </a>
                       )}
 
@@ -227,7 +230,7 @@ function DetailPanel({ sub, onClose, onApprove, onRefuse }) {
                         onMouseEnter={e => { e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.color='var(--accent)' }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.color='var(--text-secondary)' }}
                         title="Télécharger">
-                        ⬇
+                        <Download size={13} strokeWidth={2} />
                       </a>
                     </div>
                   )
@@ -239,16 +242,34 @@ function DetailPanel({ sub, onClose, onApprove, onRefuse }) {
 
         {/* ── Footer: actions ── */}
         {sub.status === 'en_attente' ? (
-          <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, flexShrink: 0, background: 'var(--bg-raised)' }}>
-            <button onClick={() => onRefuse(sub)}
-              style={{ flex: 1, padding: '10px 0', borderRadius: 9, border: '1px solid rgba(220,38,38,0.35)', background: 'rgba(220,38,38,0.06)', color: '#dc2626', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(220,38,38,0.14)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(220,38,38,0.06)'}>
-              ❌ Refuser
+          <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.03]" style={{ flexShrink: 0 }}>
+            {/* Refuser — outlined danger */}
+            <button
+              onClick={() => onRefuse(sub)}
+              disabled={busy}
+              className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-red-200 bg-white text-red-600 font-medium hover:bg-red-50 hover:border-red-300 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:border-red-900/40 dark:text-red-400 dark:hover:bg-red-950/30 dark:hover:border-red-900/60"
+            >
+              <XCircle size={18} strokeWidth={2} />
+              <span>Refuser</span>
             </button>
-            <button onClick={handleApprove} disabled={busy}
-              style={{ flex: 2, padding: '10px 0', borderRadius: 9, border: 'none', background: '#16a34a', color: 'white', fontSize: 14, fontWeight: 600, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.65 : 1, transition: 'opacity 0.15s' }}>
-              {busy ? 'Traitement…' : '✅ Accepter la soumission'}
+
+            {/* Accepter — solid gradient primary, double width */}
+            <button
+              onClick={handleApprove}
+              disabled={busy}
+              className="flex-[2] flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 text-white font-semibold shadow-sm hover:shadow-md hover:from-emerald-600 hover:to-green-700 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {busy ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  <span>Traitement…</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={18} strokeWidth={2.5} />
+                  <span>Accepter la soumission</span>
+                </>
+              )}
             </button>
           </div>
         ) : (
@@ -339,13 +360,15 @@ export default function AdminSoumissions() {
           {/* Stats row */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
             {[
-              { label: 'Total',      value: counts.all,        color: '#1d4ed8', bg: 'rgba(29,78,216,0.08)', icon: '📋' },
-              { label: 'En attente', value: counts.en_attente, color: '#d97706', bg: 'rgba(217,119,6,0.08)',  icon: '⏳' },
-              { label: 'Acceptées',  value: counts.approuve,   color: '#16a34a', bg: 'rgba(22,163,74,0.08)',  icon: '✅' },
-              { label: 'Refusées',   value: counts.rejete,     color: '#dc2626', bg: 'rgba(220,38,38,0.08)',  icon: '❌' },
+              { label: 'Total',      value: counts.all,        color: '#1d4ed8', bg: 'rgba(29,78,216,0.08)', icon: ListChecks   },
+              { label: 'En attente', value: counts.en_attente, color: '#d97706', bg: 'rgba(217,119,6,0.08)',  icon: Clock        },
+              { label: 'Acceptées',  value: counts.approuve,   color: '#16a34a', bg: 'rgba(22,163,74,0.08)',  icon: CheckCircle2 },
+              { label: 'Refusées',   value: counts.rejete,     color: '#dc2626', bg: 'rgba(220,38,38,0.08)',  icon: XCircle      },
             ].map(c => (
               <div key={c.label} className="surface" style={{ padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 13 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 11, background: c.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{c.icon}</div>
+                <div style={{ width: 40, height: 40, borderRadius: 11, background: c.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <c.icon size={18} color={c.color} strokeWidth={2} />
+                </div>
                 <div>
                   <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.04em', color: c.color, lineHeight: 1.1 }}>{c.value}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{c.label}</div>
@@ -376,7 +399,7 @@ export default function AdminSoumissions() {
             <div className="surface" style={{ padding: 40, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 14 }}>Chargement…</div>
           ) : filtered.length === 0 ? (
             <div className="surface">
-              <EmptyState icon="📋" title="Aucune soumission"
+              <EmptyState icon={ListChecks} title="Aucune soumission"
                 description={filter === 'all' ? 'Aucune soumission reçue pour le moment.' : 'Aucune soumission dans cette catégorie.'} />
             </div>
           ) : (
@@ -417,8 +440,9 @@ export default function AdminSoumissions() {
 
                   {/* Dossier */}
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      📁 {typeof s.dossier === 'object' ? (s.dossier?.titre ?? '—') : (s.dossier_titre ?? '—')}
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <Folder size={13} color="var(--accent)" strokeWidth={2} style={{ flexShrink: 0 }} />
+                      {typeof s.dossier === 'object' ? (s.dossier?.titre ?? '—') : (s.dossier_titre ?? '—')}
                     </div>
                     {typeof s.dossier === 'object' && s.dossier?.fichiers_count != null && (
                       <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>{s.dossier.fichiers_count} fichier(s)</div>
@@ -441,13 +465,13 @@ export default function AdminSoumissions() {
                           style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid rgba(22,163,74,0.35)', background: 'rgba(22,163,74,0.08)', color: '#15803d', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap' }}
                           onMouseEnter={e => e.currentTarget.style.background = 'rgba(22,163,74,0.2)'}
                           onMouseLeave={e => e.currentTarget.style.background = 'rgba(22,163,74,0.08)'}>
-                          ✅
+                          <CheckCircle2 size={14} strokeWidth={2} />
                         </button>
                         <button onClick={() => setRefuseTarget(s)}
                           style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid rgba(220,38,38,0.3)', background: 'rgba(220,38,38,0.06)', color: '#dc2626', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap' }}
                           onMouseEnter={e => e.currentTarget.style.background = 'rgba(220,38,38,0.16)'}
                           onMouseLeave={e => e.currentTarget.style.background = 'rgba(220,38,38,0.06)'}>
-                          ❌
+                          <XCircle size={14} strokeWidth={2} />
                         </button>
                       </>
                     ) : (

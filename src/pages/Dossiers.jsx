@@ -4,6 +4,7 @@ import Sidebar from '../components/Sidebar'
 import Navbar from '../components/Navbar'
 import api from '../api/axios'
 import { useDossiers } from '../context/DossiersContext'
+import { FileText, Sparkles, Trash2 } from 'lucide-react'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const DEFAULT_TYPES = {
@@ -281,7 +282,7 @@ function CreateModal({ employes, typeConfig, onClose, onCreated, onAnalysisStart
           style={{
             padding:'8px 20px', borderRadius:9, border:'none', cursor: loading?'not-allowed':'pointer',
             background: loading ? 'var(--bg-sunken)' : 'var(--accent)',
-            color: loading ? 'var(--text-tertiary)' : '#000',
+            color: loading ? 'var(--text-tertiary)' : '#fff',
             fontSize:13, fontWeight:600, display:'flex', alignItems:'center', gap:8,
             transition:'all 0.15s',
           }}>
@@ -291,6 +292,11 @@ function CreateModal({ employes, typeConfig, onClose, onCreated, onAnalysisStart
       </div>
     </Overlay>
   )
+}
+
+// ── HTML escape helper (prevents XSS in downloadPdf) ─────────────────────────
+function escHtml(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 }
 
 // ── RESUME MODAL ──────────────────────────────────────────────────────────────
@@ -346,19 +352,19 @@ function ResumeModal({ dossier, onClose }) {
     if (!result) return
     const filesHtml = result.fichiers.map(f => `
       <div class="file">
-        <div class="file-name">📄 ${f.nom}</div>
+        <div class="file-name">📄 ${escHtml(f.nom)}</div>
         <hr class="sep">
-        ${f.points.map(p => `<div class="point">— ${p}</div>`).join('')}
+        ${f.points.map(p => `<div class="point">— ${escHtml(p)}</div>`).join('')}
       </div>`).join('')
     const globalHtml = result.synthese_globale ? `
       <div class="global">
         <div class="global-rule"></div>
         <div class="global-title">🔍 Synthèse Globale</div>
         <div class="global-rule"></div>
-        <p class="global-text">${result.synthese_globale}</p>
+        <p class="global-text">${escHtml(result.synthese_globale)}</p>
       </div>` : ''
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>Synthèse — ${dossier.titre}</title>
+<title>Synthèse — ${escHtml(dossier.titre)}</title>
 <style>
   body{font-family:Georgia,serif;max-width:720px;margin:40px auto;color:#1a1a2e;line-height:1.7;font-size:14px}
   h1{font-size:20px;border-bottom:2px solid #3B82F6;padding-bottom:8px;color:#1e3a5f}
@@ -372,7 +378,7 @@ function ResumeModal({ dossier, onClose }) {
   .global-text{color:#374151;margin:12px 0 0}
   @media print{body{margin:20px}}
 </style></head><body>
-<h1>📋 Synthèse — ${dossier.titre}</h1>
+<h1>📋 Synthèse — ${escHtml(dossier.titre)}</h1>
 ${filesHtml}${globalHtml}
 </body></html>`
     const blob = new Blob([html], { type: 'text/html' })
@@ -407,7 +413,7 @@ ${filesHtml}${globalHtml}
             {result.synthese_globale && (
               <div>
                 <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:8 }}>
-                  <span style={{ fontSize:14 }}>🔍</span>
+                  <Sparkles size={14} color="var(--accent)" strokeWidth={2} />
                   <span style={{ fontSize:13, fontWeight:700, color:'var(--text-primary)', letterSpacing:'0.02em' }}>Synthèse Globale</span>
                 </div>
                 <div style={{ height:2, background:'var(--border-mid)', marginBottom:12, borderRadius:1 }} />
@@ -427,7 +433,7 @@ ${filesHtml}${globalHtml}
               <div key={fi}>
                 {/* Filename */}
                 <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:5 }}>
-                  <span style={{ fontSize:14 }}>📄</span>
+                  <FileText size={14} color="var(--text-tertiary)" strokeWidth={1.8} />
                   <span style={{ fontSize:13.5, fontWeight:700, color:'var(--text-primary)' }}>{f.nom}</span>
                 </div>
                 {/* Thin separator */}
@@ -637,8 +643,8 @@ function DossierCard({ dossier, typeConfig, onVoir, onResumer, onSupprimer, inde
   const isAnalysed = !!dossier.has_resume && !isAnalyzing
 
   const rowBg = hovered
-    ? 'rgba(0,0,0,0.03)'
-    : index % 2 === 0 ? '#ffffff' : '#F9FAFB'
+    ? 'var(--bg-sunken)'
+    : index % 2 === 0 ? 'var(--bg-raised)' : 'var(--bg)'
 
   return (
     <motion.div
@@ -676,7 +682,7 @@ function DossierCard({ dossier, typeConfig, onVoir, onResumer, onSupprimer, inde
 
       {/* File count */}
       <div style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0, minWidth:70 }}>
-        <span style={{ fontSize:13, color:'var(--text-tertiary)' }}>📄</span>
+        <FileText size={13} color="var(--text-tertiary)" strokeWidth={1.8} />
         <span style={{ fontSize:12, color:'var(--text-secondary)' }}>
           {dossier.fichiers_count} fichier{dossier.fichiers_count !== 1 ? 's' : ''}
         </span>
@@ -687,7 +693,7 @@ function DossierCard({ dossier, typeConfig, onVoir, onResumer, onSupprimer, inde
         {!hasFiles ? (
           <span style={{ fontSize:12, color:'var(--text-tertiary)', fontStyle:'italic' }}>Aucun fichier</span>
         ) : isAnalysed ? (
-          <span style={{ fontSize:12, color:'#10B981', fontWeight:500 }}>Analysé ✓</span>
+          <span style={{ fontSize:12, color:'var(--green)', fontWeight:500 }}>Analysé ✓</span>
         ) : (
           <span style={{ display:'flex', alignItems:'center', gap:5, fontSize:12, color:'var(--text-tertiary)' }}>
             <Spinner size={11} color="var(--text-tertiary)" />
@@ -722,7 +728,7 @@ function DossierCard({ dossier, typeConfig, onVoir, onResumer, onSupprimer, inde
           padding:'4px 9px', borderRadius:7, border:'1px solid #EF444433',
           background:'#EF444412', color:'#EF4444', fontSize:13, cursor:'pointer',
           transition:'all 0.12s', lineHeight:1,
-        }}>🗑</button>
+        }}><Trash2 size={13} strokeWidth={2} /></button>
       </div>
     </motion.div>
   )
@@ -962,7 +968,7 @@ export default function Dossiers() {
             <div style={{ marginLeft:'auto' }}>
               <button onClick={() => setShowCreate(true)} style={{
                 padding:'8px 18px', borderRadius:9, border:'none', cursor:'pointer',
-                background:'var(--accent)', color:'#000', fontSize:13, fontWeight:600,
+                background:'var(--accent)', color:'#fff', fontSize:13, fontWeight:600,
                 display:'flex', alignItems:'center', gap:7,
               }}>
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink:0 }}>
@@ -983,9 +989,13 @@ export default function Dossiers() {
                 color: v.color,
               }))
             ].map(s => (
-              <div key={s.label} style={{ padding:'10px 16px', background:'var(--bg-raised)', border:'1px solid var(--border)', borderRadius:10, minWidth:80 }}>
-                <div style={{ fontSize:20, fontWeight:700, color:s.color }}>{s.value}</div>
-                <div style={{ fontSize:11, color:'var(--text-tertiary)' }}>{s.label}</div>
+              <div key={s.label} style={{
+                padding:'10px 18px', background:'var(--bg-raised)',
+                border:'1px solid var(--border)', borderRadius: 'var(--r-md)',
+                minWidth:80, boxShadow:'var(--shadow-sm)',
+              }}>
+                <div style={{ fontSize:22, fontWeight:700, letterSpacing:'-0.04em', color:s.color }}>{s.value}</div>
+                <div style={{ fontSize:11, color:'var(--text-tertiary)', marginTop:2 }}>{s.label}</div>
               </div>
             ))}
           </div>
@@ -1001,7 +1011,7 @@ export default function Dossiers() {
           ) : (
             <div style={{
               border:'1px solid var(--border)', borderRadius:10, overflow:'hidden',
-              background:'#fff',
+              background:'var(--bg-raised)',
             }}>
               <AnimatePresence>
                 {filtered.map((d, i) => (

@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Folder, FolderOpen, AlertTriangle } from 'lucide-react'
 
 const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'png', 'jpg', 'jpeg', 'txt', 'zip']
 const MAX_FILE_SIZE_MB = 50
@@ -95,7 +96,12 @@ export default function FileUpload({ onUpload, uploading = false, progress = 0, 
           ) : (
             <motion.div key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-              <div style={{ fontSize: 36 }}>{isDragActive ? '📂' : '📁'}</div>
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                {isDragActive
+                  ? <FolderOpen size={36} color="#00D4FF" strokeWidth={1.5} />
+                  : <Folder     size={36} color="rgba(255,255,255,0.55)" strokeWidth={1.5} />
+                }
+              </div>
               <p style={{ margin: 0, color: isDragActive ? '#00D4FF' : 'rgba(255,255,255,0.55)', fontFamily: 'Inter, sans-serif', fontSize: '0.9rem' }}>
                 {label ?? (isDragActive ? 'Déposez ici...' : 'Glissez un fichier ici ou cliquez pour parcourir')}
               </p>
@@ -122,7 +128,8 @@ export default function FileUpload({ onUpload, uploading = false, progress = 0, 
               padding: '6px 12px',
             }}
           >
-            ⚠️ {error}
+            <AlertTriangle size={13} strokeWidth={2} style={{ verticalAlign: 'middle', marginRight: 5 }} />
+            {error}
           </motion.p>
         )}
       </AnimatePresence>

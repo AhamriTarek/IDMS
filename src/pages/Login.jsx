@@ -2,23 +2,17 @@ import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import Spline from '@splinetool/react-spline'
 
-const GOOGLE_CLIENT_ID    = import.meta.env.VITE_GOOGLE_CLIENT_ID    || ''
 const DJANGO_URL          = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const MICROSOFT_CLIENT_ID = import.meta.env.VITE_MICROSOFT_CLIENT_ID || ''
 const GITHUB_CLIENT_ID    = import.meta.env.VITE_GITHUB_CLIENT_ID    || ''
 const ORIGIN   = typeof window !== 'undefined' ? window.location.origin : ''
 const REDIRECT = `${ORIGIN}/auth/callback`
 
-// Google callback goes to Django (already authorized in Google Cloud Console).
-// The stateless view at /accounts/google/login/callback/ exchanges the code
-// and redirects to React with JWT — no allauth session state needed.
-const GOOGLE_DJANGO_CB = `${DJANGO_URL}/accounts/google/login/callback/`
-
 const oauthUrls = {
-  google: GOOGLE_CLIENT_ID
-    ? `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(GOOGLE_DJANGO_CB)}&response_type=code&scope=openid%20email%20profile&access_type=online&prompt=select_account`
-    : null,
+  // Gateway view checks credentials first, then hands off to allauth.
+  google:    `${DJANGO_URL}/auth/google-init/`,
   microsoft: MICROSOFT_CLIENT_ID
     ? `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${MICROSOFT_CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT)}&scope=openid%20email%20profile`
     : null,
@@ -157,6 +151,10 @@ export default function Login() {
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState(null)
   const [mode, setMode]             = useState('main') // 'main' | 'email'
+  const [splineLoaded, setSplineLoaded] = useState(false)
+  const [isMobile, setIsMobile]         = useState(false)
+  const splineRef = useRef(null)
+  const animationFrameRef = useRef(null)
 
   useEffect(() => {
     const p = new URLSearchParams(location.search)
@@ -164,8 +162,123 @@ export default function Login() {
       const detail = p.get('detail')
       setError(detail ? `OAuth échoué: ${detail}` : 'Connexion Google échouée. Réessayez.')
       setMode('email')
+    } else if (p.get('error') === 'google_not_configured') {
+      const detail = p.get('detail')
+      setError(detail || 'Google OAuth non configuré. Utilisez email / mot de passe.')
+      setMode('email')
     }
   }, [location])
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+        console.log('[SPLINE DEBUG] Animation stopped (cleanup)')
+      }
+    }
+  }, [])
+
+  const onSplineLoad = (spline) => {
+    setSplineLoaded(true)
+    splineRef.current = spline
+
+    console.log('═══════ SPLINE WAVE DEBUG ═══════')
+
+    try {
+      const g3 = spline.findObjectByName('Group 3')
+      const g4 = spline.findObjectByName('Group 4')
+      const g5 = spline.findObjectByName('Group 5')
+      const g6 = spline.findObjectByName('Group 6')
+
+      const groups = { 'Group 3': g3, 'Group 4': g4, 'Group 5': g5, 'Group 6': g6 }
+
+      Object.entries(groups).forEach(([name, obj]) => {
+        if (!obj) {
+          console.error(`❌ ${name}: NOT FOUND`)
+          return
+        }
+        console.log(`📦 ${name}:`, {
+          type: obj.type,
+          hasPosition: !!obj.position,
+          y: obj.position?.y,
+          hasParent: !!obj.parent,
+          parentName: obj.parent?.name,
+          parentType: obj.parent?.type,
+        })
+      })
+
+      // Walk up the parent chain until we find a node whose position.y is mutable.
+      const findAnimatableTarget = (obj, depth = 0) => {
+        if (!obj || depth >= 5) return null
+        if (obj.position) {
+          try {
+            const testY = obj.position.y
+            obj.position.y = testY + 0.001
+            obj.position.y = testY
+            return obj
+          } catch (e) {
+            return obj.parent ? findAnimatableTarget(obj.parent, depth + 1) : null
+          }
+        }
+        return obj.parent ? findAnimatableTarget(obj.parent, depth + 1) : null
+      }
+
+      const targets = [g3, g4, g5, g6]
+        .map((g, i) => {
+          const t = findAnimatableTarget(g)
+          console.log(`🎯 File ${i + 1} animatable target:`, t?.name || 'NONE')
+          return t
+        })
+        .filter(Boolean)
+
+      if (targets.length === 0) {
+        console.error('❌ No animatable targets found!')
+        return
+      }
+
+      console.log(`✅ Found ${targets.length} animatable targets`)
+
+      const originalY = targets.map(t => t.position.y)
+      console.log('Original Y positions:', originalY)
+
+      // Files 1 & 3 → phase 0 ; Files 2 & 4 → phase π (opposite).
+      const phases = [0, Math.PI, 0, Math.PI]
+
+      let frameCount = 0
+      const animate = () => {
+        const time = Date.now() / 1000
+
+        targets.forEach((obj, i) => {
+          if (obj?.position) {
+            const phase = phases[i] || 0
+            const offset = Math.sin(time * 1.5 + phase) * 20
+            obj.position.y = originalY[i] + offset
+            if (obj.emit) obj.emit('update')
+          }
+        })
+
+        frameCount++
+        if (frameCount % 60 === 0) {
+          const positions = targets.map((t, i) => `F${i + 1}: ${t.position.y.toFixed(1)}`).join(' | ')
+          console.log(`[WAVE] Frame ${frameCount}:`, positions)
+        }
+
+        animationFrameRef.current = requestAnimationFrame(animate)
+      }
+
+      console.log('🚀 Starting wave animation...')
+      animate()
+    } catch (e) {
+      console.error('❌ Spline error:', e)
+    }
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -240,6 +353,20 @@ export default function Login() {
           border-radius:99px; padding:7px 16px;
           color:rgba(255,255,255,0.75); font-size:13px; font-weight:500;
         }
+        /* Hide the "Built with Spline" watermark badge */
+        a[href*="spline.design"],
+        [class*="spline-watermark"],
+        [class*="splineWatermark"],
+        canvas + a {
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+        }
+        .spline-wrapper a,
+        [data-spline] a {
+          display: none !important;
+        }
       `}</style>
 
       {/* ── LEFT HERO ─────────────────────────────────────────────── */}
@@ -250,11 +377,50 @@ export default function Login() {
         transition={{ duration: 0.8 }}
         style={{
           flex: 1, display: 'none', position: 'relative', overflow: 'hidden',
-          background: 'linear-gradient(145deg, #0f0c29 0%, #1a1040 50%, #24243e 100%)',
+          background: 'linear-gradient(135deg, #1a1a2e 0%, #2d1b4e 50%, #0f3460 100%)',
           flexDirection: 'column', justifyContent: 'space-between',
           padding: '52px 60px',
         }}
       >
+        {/* Spline 3D scene as background overlay on the hero panel */}
+        {!isMobile && (
+          <div className="spline-container spline-wrapper" data-spline style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'hidden', zIndex: 0 }}>
+            {/* Inner opacity wrapper — keeps Spline dim without affecting mask overlays */}
+            <div style={{ position: 'absolute', inset: 0, opacity: 0.8 }}>
+              <Spline
+                scene="https://prod.spline.design/ynPbl6lmmdtrXSwr/scene.splinecode"
+                onLoad={onSplineLoad}
+                style={{ width: '100%', height: '100%' }}
+              />
+            </div>
+
+            {/* Layer 3: Radial blend — softens the edges of the solid block */}
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              right: 0,
+              width: 280,
+              height: 100,
+              background: 'radial-gradient(circle at bottom right, #0a0a1a 0%, transparent 70%)',
+              zIndex: 9998,
+              pointerEvents: 'none',
+            }} />
+
+            {/* Layer 1: Solid block — fully opaque cover over the "Built with Spline" badge */}
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              right: 0,
+              width: 220,
+              height: 70,
+              background: '#0a0a1a',
+              zIndex: 9999,
+              pointerEvents: 'none',
+              borderTopLeftRadius: 12,
+            }} />
+          </div>
+        )}
+
         <OrbCanvas />
 
         {/* Grid overlay */}
@@ -338,7 +504,7 @@ export default function Login() {
         width:'100%', maxWidth:500,
         display:'flex', flexDirection:'column', justifyContent:'center',
         padding:'48px 40px',
-        background:'#FAFBFD',
+        background:'#FFFFFF',
         boxShadow:'-1px 0 0 rgba(0,0,0,0.06)',
         overflowY:'auto',
       }}>
@@ -373,11 +539,21 @@ export default function Login() {
                 </div>
 
                 <div style={{ textAlign:'center', marginBottom:32 }}>
-                  <h2 style={{ fontSize:26, fontWeight:700, letterSpacing:'-0.03em', color:'#1a1a2e', marginBottom:6 }}>
-                    Bon retour 👋
+                  <h2 style={{
+                    fontSize:28, fontWeight:700, letterSpacing:'-0.03em',
+                    color:'#1a1a2e', marginBottom:8,
+                    fontFamily:'var(--font-serif)',
+                  }}>
+                    Bienvenue sur{' '}
+                    <span style={{
+                      background:'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                      WebkitBackgroundClip:'text',
+                      WebkitTextFillColor:'transparent',
+                      backgroundClip:'text',
+                    }}>IDMS</span>
                   </h2>
-                  <p style={{ fontSize:14, color:'#6b7280' }}>
-                    Accès réservé au personnel autorisé
+                  <p style={{ fontSize:14, color:'#6b7280', lineHeight:1.55 }}>
+                    Connectez-vous pour accéder à votre espace
                   </p>
                 </div>
 

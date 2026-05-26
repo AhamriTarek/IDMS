@@ -6,6 +6,7 @@ import EmptyState from '../../components/EmptyState'
 import { useDossiers } from '../../context/DossiersContext'
 import { employeAPI } from '../../services/employeAPI'
 import api from '../../api/axios'
+import { FileText, BarChart3, Image, Folder, FolderOpen, Clock, Eye, Trash2, Sparkles, Upload as UploadIcon } from 'lucide-react'
 
 // acces string → { ajouter, supprimer }
 function accesToPerm(acces) {
@@ -21,7 +22,7 @@ function formatSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
 }
 
-const FILE_ICON = { pdf: '📄', docx: '📝', xlsx: '📊', image: '🖼️', autre: '📁' }
+const FILE_ICON = { pdf: FileText, docx: FileText, xlsx: BarChart3, image: Image, autre: Folder }
 
 // ── Shared modal helpers ──────────────────────────────────────────────────────
 
@@ -66,6 +67,11 @@ function ModalHeader({ title, onClose }) {
       <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 20, lineHeight: 1, padding: '0 2px' }}>×</button>
     </div>
   )
+}
+
+// ── HTML escape helper (prevents XSS in downloadPdf) ─────────────────────────
+function escHtml(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 }
 
 // ── Resume Modal (read-only for employee) ─────────────────────────────────────
@@ -122,19 +128,19 @@ function ResumeModal({ dossier, onClose }) {
     if (!result) return
     const filesHtml = result.fichiers.map(f => `
       <div class="file">
-        <div class="file-name">📄 ${f.nom}</div>
+        <div class="file-name">📄 ${escHtml(f.nom)}</div>
         <hr class="sep">
-        ${f.points.map(p => `<div class="point">— ${p}</div>`).join('')}
+        ${f.points.map(p => `<div class="point">— ${escHtml(p)}</div>`).join('')}
       </div>`).join('')
     const globalHtml = result.synthese_globale ? `
       <div class="global">
         <div class="global-rule"></div>
         <div class="global-title">🔍 Synthèse Globale</div>
         <div class="global-rule"></div>
-        <p class="global-text">${result.synthese_globale}</p>
+        <p class="global-text">${escHtml(result.synthese_globale)}</p>
       </div>` : ''
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>Synthèse — ${dossier.titre}</title>
+<title>Synthèse — ${escHtml(dossier.titre)}</title>
 <style>
   body{font-family:Georgia,serif;max-width:720px;margin:40px auto;color:#1a1a2e;line-height:1.7;font-size:14px}
   h1{font-size:20px;border-bottom:2px solid #3B82F6;padding-bottom:8px;color:#1e3a5f}
@@ -148,7 +154,7 @@ function ResumeModal({ dossier, onClose }) {
   .global-text{color:#374151;margin:12px 0 0}
   @media print{body{margin:20px}}
 </style></head><body>
-<h1>📋 Synthèse — ${dossier.titre}</h1>
+<h1>📋 Synthèse — ${escHtml(dossier.titre)}</h1>
 ${filesHtml}${globalHtml}
 </body></html>`
     const blob = new Blob([html], { type: 'text/html' })
@@ -171,7 +177,7 @@ ${filesHtml}${globalHtml}
 
         {state === 'pending' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '32px 0', color: 'var(--text-tertiary)', fontSize: 13 }}>
-            <span style={{ fontSize: 22 }}>⏳</span>
+            <Clock size={22} color="var(--text-tertiary)" strokeWidth={1.8} />
             <span>La synthèse n'est pas encore disponible.</span>
           </div>
         )}
@@ -182,7 +188,7 @@ ${filesHtml}${globalHtml}
             {result.synthese_globale && (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-                  <span style={{ fontSize: 14 }}>🔍</span>
+                  <Sparkles size={14} color="var(--accent)" strokeWidth={2} />
                   <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.02em' }}>Synthèse Globale</span>
                 </div>
                 <div style={{ height: 2, background: 'var(--border-mid)', marginBottom: 12, borderRadius: 1 }} />
@@ -199,7 +205,7 @@ ${filesHtml}${globalHtml}
             {result.fichiers.map((f, fi) => (
               <div key={fi}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
-                  <span style={{ fontSize: 14 }}>📄</span>
+                  <FileText size={14} color="var(--text-tertiary)" strokeWidth={1.8} />
                   <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>{f.nom}</span>
                 </div>
                 <div style={{ height: 1, background: 'var(--border)', marginBottom: 9 }} />
@@ -282,7 +288,9 @@ function SoumissionModal({ dossier, onClose, onSuccess }) {
         style={{ width: '100%', maxWidth: 480, background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 20, boxShadow: 'var(--shadow-xl)', overflow: 'hidden' }}>
 
         <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(29,78,216,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>📤</div>
+          <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(29,78,216,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <UploadIcon size={16} color="#1d4ed8" strokeWidth={2} />
+          </div>
           <div>
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Soumettre au Admin</h3>
             <p style={{ margin: 0, fontSize: 12, color: 'var(--text-tertiary)' }}>Dossier : {dossier.titre}</p>
@@ -303,7 +311,7 @@ function SoumissionModal({ dossier, onClose, onSuccess }) {
           <div style={{ display: 'flex', gap: 10 }}>
             <button type="button" onClick={onClose} className="btn-secondary" style={{ flex: 1, fontSize: 13 }}>Annuler</button>
             <button type="submit" disabled={busy} style={{ flex: 2, padding: '9px 0', borderRadius: 9, border: 'none', cursor: busy ? 'not-allowed' : 'pointer', background: '#1d4ed8', color: '#fff', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: busy ? 0.65 : 1 }}>
-              <span>📤</span>{busy ? 'Envoi…' : 'Envoyer au Admin'}
+              <UploadIcon size={14} strokeWidth={2} />{busy ? 'Envoi…' : 'Envoyer au Admin'}
             </button>
           </div>
         </form>
@@ -370,7 +378,7 @@ export default function EmployeeDossiers() {
       await employeAPI.uploadFichier(dossierId, file)
       // Force-refresh so the employee sees their new en_attente file with the badge
       await fetchFiles(dossierId)
-      setToast({ message: 'Fichier ajouté — en attente d\'approbation ⏳', type: 'success' })
+      setToast({ message: 'Fichier ajouté — en attente d\'approbation', type: 'success' })
     } catch {
       setToast({ message: 'Erreur lors de l\'ajout du fichier', type: 'error' })
     }
@@ -413,12 +421,11 @@ export default function EmployeeDossiers() {
 
           {filtered.length === 0 ? (
             <div className="surface">
-              <EmptyState icon="📂" title="Aucun dossier accessible" description="Aucun dossier ne vous a été assigné pour le moment." />
+              <EmptyState icon={FolderOpen} title="Aucun dossier accessible" description="Aucun dossier ne vous a été assigné pour le moment." />
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {filtered.map((d, i) => {
-                console.log('[EmployeeDossiers] dossier', d.id, d.titre, 'has_resume=', d.has_resume)
                 const perm       = permsMap[d.id] || { ajouter: false, supprimer: false }
                 const isExpanded = expanded === d.id
                 const dFiles     = filesMap[d.id] || []
@@ -433,7 +440,9 @@ export default function EmployeeDossiers() {
                       onClick={() => toggleExpand(d.id)}
                       onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                      <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(29,78,216,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 20 }}>📁</div>
+                      <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(29,78,216,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Folder size={20} color="#1d4ed8" strokeWidth={2} />
+                      </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{d.titre}</div>
                         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{d.fichiers_count ?? 0} fichier(s)</div>
@@ -443,8 +452,8 @@ export default function EmployeeDossiers() {
                       <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                         {perm.ajouter  && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 99, background: '#d1fae5', color: '#065f46', fontWeight: 600 }}>✓ Ajouter</span>}
                         {perm.supprimer && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 99, background: '#fee2e2', color: '#991b1b', fontWeight: 600 }}>✓ Supprimer</span>}
-                        {!perm.ajouter && !perm.supprimer && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 99, background: '#f3f4f6', color: '#6b7280', fontWeight: 600 }}>👁 Lecture seule</span>}
-                        {d.has_resume && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 99, background: 'rgba(139,92,246,0.12)', color: '#8B5CF6', fontWeight: 600, border: '1px solid rgba(139,92,246,0.25)' }}>🔍 Résumé</span>}
+                        {!perm.ajouter && !perm.supprimer && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 99, background: '#f3f4f6', color: '#6b7280', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Eye size={11} strokeWidth={2} /> Lecture seule</span>}
+                        {d.has_resume && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 99, background: 'rgba(139,92,246,0.12)', color: '#8B5CF6', fontWeight: 600, border: '1px solid rgba(139,92,246,0.25)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Sparkles size={11} strokeWidth={2} /> Résumé</span>}
                       </div>
 
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}>
@@ -472,14 +481,14 @@ export default function EmployeeDossiers() {
                               style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 14px', borderRadius: 9, background: 'rgba(29,78,216,0.08)', color: '#1d4ed8', border: '1px solid rgba(29,78,216,0.2)', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' }}
                               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(29,78,216,0.14)' }}
                               onMouseLeave={e => { e.currentTarget.style.background = 'rgba(29,78,216,0.08)' }}>
-                              📤 Soumettre au Admin
+                              <UploadIcon size={14} strokeWidth={2} /> Soumettre au Admin
                             </button>
                             {d.has_resume && (
                               <button onClick={e => { e.stopPropagation(); setResumeModal(d) }}
                                 style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 14px', borderRadius: 9, background: 'rgba(139,92,246,0.08)', color: '#8B5CF6', border: '1px solid rgba(139,92,246,0.2)', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' }}
                                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.14)' }}
                                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.08)' }}>
-                                🔍 Résumer
+                                <Sparkles size={14} strokeWidth={2} /> Résumer
                               </button>
                             )}
                           </div>
@@ -501,7 +510,7 @@ export default function EmployeeDossiers() {
                                   onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
                                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <span style={{ fontSize: 16, flexShrink: 0 }}>{FILE_ICON[f.type_fichier] || '📁'}</span>
+                                    {(() => { const FIcon = FILE_ICON[f.type_fichier] || Folder; return <FIcon size={16} color="var(--text-tertiary)" strokeWidth={1.8} style={{ flexShrink: 0 }} /> })()}
                                     <span style={{ fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.nom}</span>
                                     {f.status === 'en_attente' && (
                                       <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 99, background: 'rgba(217,119,6,0.12)', color: '#b45309', border: '1px solid rgba(217,119,6,0.25)' }}>
@@ -514,13 +523,13 @@ export default function EmployeeDossiers() {
                                   <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{f.taille_mb ? `${f.taille_mb} Mo` : formatSize(f.taille)}</span>
                                   <div style={{ display: 'flex', gap: 5 }}>
                                     <a href={f.fichier} target="_blank" rel="noreferrer" title="Voir / Télécharger"
-                                      style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', textDecoration: 'none', fontSize: 13 }}>
-                                      👁
+                                      style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', textDecoration: 'none' }}>
+                                      <Eye size={13} strokeWidth={2} />
                                     </a>
                                     {perm.supprimer && (
                                       <button onClick={() => handleDelete(d.id, f)} title="Supprimer"
-                                        style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.06)', color: '#EF4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>
-                                        🗑
+                                        style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.06)', color: '#EF4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Trash2 size={13} strokeWidth={2} />
                                       </button>
                                     )}
                                   </div>

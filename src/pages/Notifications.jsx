@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import Sidebar from '../components/Sidebar'
 import Navbar from '../components/Navbar'
 import { useNotifications } from '../context/NotificationContext'
+import { Bell } from 'lucide-react'
 
 const typeConfig = {
   info:    { color: 'var(--accent)', bg: 'var(--accent-soft)' },
@@ -58,16 +59,18 @@ export default function Notifications() {
                 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
-                    <span style={{ fontSize: 14, fontWeight: n.lu ? 400 : 600, color: 'var(--text-primary)', lineHeight: 1.4 }}>
-                      {n.titre}
-                    </span>
+                    <p style={{
+                      margin: 0,
+                      fontSize: 14, lineHeight: 1.5,
+                      fontWeight: n.lu ? 400 : 500,
+                      color: 'var(--text-primary)',
+                    }}>
+                      {n.message}
+                    </p>
                     <span style={{ fontSize: 11, color: 'var(--text-tertiary)', whiteSpace: 'nowrap', flexShrink: 0 }}>
                       {timeAgo(n.created_at)}
                     </span>
                   </div>
-                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    {n.message}
-                  </p>
                 </div>
                 {!n.lu && (
                   <div style={{ width: 7, height: 7, borderRadius: '50%', background: cfg.color, flexShrink: 0, marginTop: 7 }} />
@@ -103,7 +106,9 @@ export default function Notifications() {
 
           {notifications.length === 0 ? (
             <div className="surface" style={{ padding: '56px 24px', textAlign: 'center' }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>🔔</div>
+              <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center' }}>
+                <Bell size={32} color="var(--text-tertiary)" strokeWidth={1.5} />
+              </div>
               <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>Aucune notification pour l'instant</p>
             </div>
           ) : (

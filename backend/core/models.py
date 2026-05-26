@@ -7,6 +7,7 @@ class Administrateur(models.Model):
     nom = models.CharField(max_length=100)
     prenom = models.CharField(max_length=100)
     telephone = models.CharField(max_length=20, blank=True)
+    photo = models.ImageField(upload_to='profiles/admins/%Y/%m/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -44,6 +45,7 @@ class Employe(models.Model):
     telephone = models.CharField(max_length=20, blank=True)
     google_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
     avatar = models.URLField(max_length=500, blank=True, null=True)
+    photo = models.ImageField(upload_to='profiles/employes/%Y/%m/', null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

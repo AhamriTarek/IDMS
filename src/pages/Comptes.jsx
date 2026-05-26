@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Trash2, UserPlus, FolderOpen, ChevronDown, Upload, Pencil, Eye } from 'lucide-react'
+import { Trash2, UserPlus, FolderOpen, ChevronDown, Upload, Pencil, Eye, Info } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 import Navbar from '../components/Navbar'
+import ProfileAvatar from '../components/ProfileAvatar'
 import api from '../api/axios'
 import { useDossiers } from '../context/DossiersContext'
 
@@ -50,18 +51,6 @@ function accesToPerm(acces) {
 // SMALL UI COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Avatar({ name = '?', size = 34 }) {
-  const initials = name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'
-  const palette  = ['#0071E3', '#34C759', '#FF9F0A', '#FF3B30', '#AF52DE', '#32ADE6']
-  const bg       = palette[name.charCodeAt(0) % palette.length] || palette[0]
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: '50%', background: bg, flexShrink: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: '#fff', fontSize: size * 0.36, fontWeight: 700,
-    }}>{initials}</div>
-  )
-}
 
 function Chip({ label }) {
   return (
@@ -105,7 +94,7 @@ function DeleteModal({ employe, onClose, onDeleted }) {
         </div>
         <div style={{ padding: '12px 22px 18px', display: 'flex', gap: 10 }}>
           <button onClick={onClose} className="btn-secondary" style={{ flex: 1, fontSize: 13 }}>Annuler</button>
-          <button onClick={confirm} disabled={busy} style={{ flex: 1, padding: '8px 0', borderRadius: 9, border: 'none', cursor: 'pointer', background: '#EF4444', color: '#fff', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <button onClick={confirm} disabled={busy} style={{ flex: 1, padding: '8px 0', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'var(--red)', color: '#fff', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <Trash2 size={13} />{busy ? 'Suppression…' : 'Supprimer'}
           </button>
         </div>
@@ -154,11 +143,11 @@ function DossierPermSection({ dossiers, localDossiers, setLocalDossiers }) {
           const granted = isGranted(d.id)
           const perms   = getPerms(d.id)
           return (
-            <div key={d.id} style={{ border: `1px solid ${granted ? '#3B82F644' : 'var(--border)'}`, borderRadius: 10, padding: '10px 12px', background: granted ? '#3B82F608' : 'var(--bg)', transition: 'all 0.15s' }}>
+            <div key={d.id} style={{ border: `1px solid ${granted ? 'var(--border-mid)' : 'var(--border)'}`, borderRadius: 10, padding: '10px 12px', background: granted ? 'var(--accent-soft)' : 'var(--bg)', transition: 'all 0.15s' }}>
               {/* Dossier row */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <input type="checkbox" checked={granted} onChange={() => toggleDossier(d)}
-                  style={{ width: 15, height: 15, accentColor: '#3B82F6', cursor: 'pointer', flexShrink: 0 }} />
+                  style={{ width: 15, height: 15, accentColor: 'var(--accent)', cursor: 'pointer', flexShrink: 0 }} />
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {d.titre}
                 </span>
@@ -219,7 +208,6 @@ function CreateModal({ onClose, onCreated, dossiers, typeEmployes }) {
       })
 
       const eid = reg.employe_id
-      console.log('[CreateModal] registered employe_id:', eid)
 
       // Create permissions
       if (eid && localDossiers.length > 0) {
@@ -227,7 +215,7 @@ function CreateModal({ onClose, onCreated, dossiers, typeEmployes }) {
         await Promise.all(localDossiers.map(async d => {
           const acces = permToAcces(d.permissions)
           try { await api.post('/permissions/', { employe_id: eid, dossier_id: Number(d.id), acces }) }
-          catch (err) { errs.push(JSON.stringify(err.response?.data ?? 'unknown')); console.error('[CreateModal] perm error:', err.response?.data) }
+          catch (err) { errs.push(JSON.stringify(err.response?.data ?? 'unknown')) }
         }))
         if (errs.length) { setError(`Compte créé, erreur permission : ${errs.join('; ')}`); setBusy(false); onCreated(); return }
       }
@@ -269,7 +257,9 @@ function CreateModal({ onClose, onCreated, dossiers, typeEmployes }) {
           <div>
             <label style={lbl}>Email Gmail *</label>
             <input className="input" type="email" value={form.email} onChange={set('email')} placeholder="prenom.nom@gmail.com" style={{ fontSize: 13 }} required />
-            <p style={{ margin: '5px 0 0', fontSize: 11, color: 'var(--text-tertiary)' }}>ℹ️ Connexion via Google (Gmail requis)</p>
+            <p style={{ margin: '5px 0 0', fontSize: 11, color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Info size={11} strokeWidth={2} /> Connexion via Google (Gmail requis)
+            </p>
           </div>
           <div>
             <label style={lbl}>Type de compte</label>
@@ -287,7 +277,7 @@ function CreateModal({ onClose, onCreated, dossiers, typeEmployes }) {
 
         <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, flexShrink: 0 }}>
           <button type="button" onClick={onClose} className="btn-secondary" style={{ flex: 1, fontSize: 13 }}>Annuler</button>
-          <button onClick={submit} disabled={busy} style={{ flex: 2, padding: '9px 0', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'var(--accent)', color: '#000', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: busy ? 0.7 : 1 }}>
+          <button onClick={submit} disabled={busy} style={{ flex: 2, padding: '9px 0', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'var(--accent)', color: '#fff', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: busy ? 0.7 : 1 }}>
             <UserPlus size={14} />{busy ? 'Enregistrement…' : 'Enregistrer'}
           </button>
         </div>
@@ -334,25 +324,22 @@ function EditModal({ employe, onClose, onDone, dossiers }) {
       return current[id].acces !== newAcces
     })
 
-    console.log('[EditModal] save — eid:', eid, '| create:', toCreate, '| update:', toUpdate, '| delete:', toDelete)
-
     const errs = []
     await Promise.all([
       ...toDelete.map(id =>
         api.delete(`/permissions/${current[id].permId}/`)
-          .catch(e => { console.error('DELETE failed', e.response?.data); errs.push(e) })
+          .catch(e => { errs.push(e) })
       ),
       ...toUpdate.map(id => {
         const newAcces = permToAcces(localDossiers.find(d => Number(d.id) === id).permissions)
         return api.patch(`/permissions/${current[id].permId}/`, { acces: newAcces })
-          .catch(e => { console.error('PATCH failed', e.response?.data); errs.push(e) })
+          .catch(e => { errs.push(e) })
       }),
       ...toCreate.map(id => {
         const entry  = localDossiers.find(d => Number(d.id) === id)
         const acces  = permToAcces(entry.permissions)
-        console.log('[EditModal] POST /permissions/ — employe_id:', eid, 'dossier_id:', id, 'acces:', acces)
         return api.post('/permissions/', { employe_id: eid, dossier_id: id, acces })
-          .catch(e => { console.error('POST failed', e.response?.data); errs.push(e) })
+          .catch(e => { errs.push(e) })
       }),
     ])
 
@@ -363,9 +350,7 @@ function EditModal({ employe, onClose, onDone, dossiers }) {
       return
     }
 
-    console.log('SAVING DOSSIERS:', localDossiers) // DEBUG
-    // ── CRITICAL: pass updated dossiers back so parent updates the table row IMMEDIATELY ──
-    onDone(eid, localDossiers)   // parent calls setAccounts immediately, no API round-trip needed
+    onDone(eid, localDossiers)
     onClose()
   }
 
@@ -395,7 +380,7 @@ function EditModal({ employe, onClose, onDone, dossiers }) {
 
         <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, flexShrink: 0 }}>
           <button type="button" onClick={onClose} className="btn-secondary" style={{ flex: 1, fontSize: 13 }}>Annuler</button>
-          <button onClick={handleSavePermissions} disabled={busy} style={{ flex: 2, padding: '9px 0', borderRadius: 9, border: 'none', cursor: 'pointer', background: '#3B82F6', color: '#fff', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: busy ? 0.7 : 1 }}>
+          <button onClick={handleSavePermissions} disabled={busy} style={{ flex: 2, padding: '9px 0', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'var(--accent)', color: '#fff', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: busy ? 0.7 : 1 }}>
             <Pencil size={14} />{busy ? 'Enregistrement…' : 'Enregistrer'}
           </button>
         </div>
@@ -434,8 +419,6 @@ export default function Comptes() {
         safe('/type-employes/'),
       ])
 
-      console.log('[Comptes] load — employes:', emps.length, '| permissions:', perms.length)
-
       // Build map: employe_id → [permission objects]
       const permsMap = {}
       perms.forEach(p => {
@@ -467,12 +450,9 @@ export default function Comptes() {
         }
       })
 
-      console.log('[Comptes] merged accounts:', merged.map(a => ({ name: `${a.prenom} ${a.nom}`, dossiers: a.dossiers.length })))
-
       setAccounts(merged)
       setTypeEmployes(types)
-    } catch (err) {
-      console.error('[Comptes] load failed:', err)
+    } catch {
     } finally {
       setLoading(false)
     }
@@ -480,22 +460,12 @@ export default function Comptes() {
 
   useEffect(() => { load() }, [load])
 
-  useEffect(() => {
-    console.log('[Comptes] dossiers from context:', dossiers.map(d => d.titre))
-  }, [dossiers])
-
-  useEffect(() => {
-    console.log('ACCOUNTS STATE:', JSON.stringify(accounts.map(a => ({ id: a.id, name: `${a.prenom} ${a.nom}`, dossiers: a.dossiers?.length })), null, 2))
-  }, [accounts])
-
   // ── handleSavePermissions: IMMEDIATE optimistic update, no reload needed ───
   //
   // EditModal calls onDone(employeId, localDossiers) where localDossiers is
   // [{ id, nom, permissions: { ajouter, modifier, supprimer } }]
   //
   const handleSavePermissions = useCallback((employeId, updatedDossiers) => {
-    console.log('RECEIVED UPDATED ACCOUNT:', employeId, updatedDossiers) // DEBUG
-
     setAccounts(prev => {
       const newAccounts = prev.map(acc => {
         if (acc.id !== employeId) return acc
@@ -507,7 +477,6 @@ export default function Comptes() {
         }))
         return { ...acc, dossiers: updatedDossiers, _rawDossiers: newRaw }
       })
-      console.log('NEW ACCOUNTS ARRAY:', newAccounts.map(a => ({ id: a.id, name: `${a.prenom} ${a.nom}`, dossiers: a.dossiers?.length }))) // DEBUG
       return newAccounts
     })
 
@@ -559,7 +528,7 @@ export default function Comptes() {
                 </svg>
                 <input className="input" value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher…" style={{ paddingLeft: 34, width: 200, fontSize: 13 }} />
               </div>
-              <button onClick={() => setShowCreate(true)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'var(--accent)', color: '#000', fontSize: 13, fontWeight: 600 }}>
+              <button onClick={() => setShowCreate(true)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'var(--accent)', color: '#fff', fontSize: 13, fontWeight: 600 }}>
                 <UserPlus size={14} />Nouveau compte
               </button>
             </div>
@@ -593,7 +562,12 @@ export default function Comptes() {
                   >
                     {/* EMPLOYÉ */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-                      <Avatar name={`${acc.prenom} ${acc.nom}`} size={34} />
+                      <ProfileAvatar
+                        photoUrl={acc.photo_url}
+                        name={`${acc.prenom} ${acc.nom}`}
+                        size={34}
+                        ring={false}
+                      />
                       <div>
                         <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3 }}>{acc.prenom} {acc.nom}</div>
                         <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>{acc.user?.email ?? '—'}</div>

@@ -60,7 +60,7 @@ export default function EmployeDashboard() {
           {/* Greeting */}
           <motion.div {...fade(0)} style={{ marginBottom: 32 }}>
             <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-primary)', margin: '0 0 4px' }}>
-              {greeting}, {prenom} 👋
+              {greeting}, {prenom}
             </h1>
             <p style={{ fontSize: 14, color: 'var(--text-tertiary)', margin: 0 }}>
               {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}

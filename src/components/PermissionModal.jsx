@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import api from '../api/axios'
+import { Eye, PenLine, KeyRound, AlertTriangle } from 'lucide-react'
 
 export default function PermissionModal({ isOpen, onClose, employe, dossiers = [], existingPermissions = [] }) {
   const [dossier, setDossier]   = useState('')
@@ -43,9 +44,9 @@ export default function PermissionModal({ isOpen, onClose, employe, dossiers = [
   }
 
   const accesList = [
-    { value: 'lecture',  label: '👁 Lecture',   desc: 'Peut voir les fichiers' },
-    { value: 'ecriture', label: '✏️ Écriture',  desc: 'Peut modifier les fichiers' },
-    { value: 'admin',    label: '🔑 Admin',      desc: 'Accès complet' },
+    { value: 'lecture',  icon: Eye,      label: 'Lecture',  desc: 'Peut voir les fichiers' },
+    { value: 'ecriture', icon: PenLine,  label: 'Écriture', desc: 'Peut modifier les fichiers' },
+    { value: 'admin',    icon: KeyRound, label: 'Admin',    desc: 'Accès complet' },
   ]
 
   return (
@@ -121,7 +122,9 @@ export default function PermissionModal({ isOpen, onClose, employe, dossiers = [
                       <input type="radio" value={a.value} checked={acces === a.value}
                         onChange={() => setAcces(a.value)} style={{ accentColor: '#00D4FF' }} />
                       <div>
-                        <div style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.875rem', color: '#fff', fontWeight: 500 }}>{a.label}</div>
+                        <div style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.875rem', color: '#fff', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <a.icon size={14} strokeWidth={2} />{a.label}
+                        </div>
                         <div style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>{a.desc}</div>
                       </div>
                     </label>
@@ -132,7 +135,7 @@ export default function PermissionModal({ isOpen, onClose, employe, dossiers = [
               {error && (
                 <p style={{ margin: '0 0 1rem', color: '#EF4444', fontSize: '0.8rem', fontFamily: 'Inter, sans-serif',
                   background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '6px 12px' }}>
-                  ⚠️ {error}
+                  <AlertTriangle size={13} strokeWidth={2} style={{ verticalAlign: 'middle', marginRight: 5 }} />{error}
                 </p>
               )}
               {success && (

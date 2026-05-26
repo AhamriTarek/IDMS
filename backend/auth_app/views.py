@@ -18,6 +18,19 @@ logger = logging.getLogger(__name__)
 GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 
 
+def google_oauth_init(request):
+    """
+    Gateway for Google OAuth. Checks that credentials are configured before
+    handing off to allauth. Returns a frontend-friendly redirect if not set.
+    """
+    if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
+        return redirect(
+            f"{settings.FRONTEND_URL}/?error=google_not_configured"
+            "&detail=Connexion+Google+non+configurée+sur+le+serveur"
+        )
+    return redirect('/accounts/google/login/')
+
+
 def google_oauth_callback(request):
     """
     Stateless Google OAuth callback registered BEFORE allauth URLs so it

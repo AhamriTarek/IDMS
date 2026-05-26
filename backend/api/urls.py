@@ -19,6 +19,7 @@ urlpatterns = [
     path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
     path('register/', views.register_employe, name='register'),
     path('me/', views.me, name='me'),
+    path('profile/photo/', views.upload_profile_photo, name='profile-photo'),
     path('logout/', views.logout_view, name='logout'),
     path('stats/', views.stats_overview, name='stats'),
     path('stats/dossiers-par-type/', views.stats_dossiers_par_type, name='stats-par-type'),

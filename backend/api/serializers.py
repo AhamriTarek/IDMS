@@ -29,10 +29,19 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class AdministrateurSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Administrateur
-        fields = ('id', 'user', 'nom', 'prenom', 'telephone', 'created_at')
+        fields = ('id', 'user', 'nom', 'prenom', 'telephone', 'photo', 'photo_url', 'created_at')
+        read_only_fields = ('photo',)
+
+    def get_photo_url(self, obj):
+        if not obj.photo:
+            return None
+        request = self.context.get('request')
+        url = obj.photo.url
+        return request.build_absolute_uri(url) if request else url
 
 
 class TypeEmployeSerializer(serializers.ModelSerializer):
@@ -47,13 +56,23 @@ class EmployeSerializer(serializers.ModelSerializer):
     type_employe_id = serializers.PrimaryKeyRelatedField(
         queryset=TypeEmploye.objects.all(), source='type_employe', write_only=True, required=False
     )
+    photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Employe
         fields = (
             'id', 'user', 'type_employe', 'type_employe_id',
-            'nom', 'prenom', 'telephone', 'avatar', 'is_active', 'created_at'
+            'nom', 'prenom', 'telephone', 'avatar', 'photo', 'photo_url',
+            'is_active', 'created_at'
         )
+        read_only_fields = ('photo',)
+
+    def get_photo_url(self, obj):
+        if not obj.photo:
+            return None
+        request = self.context.get('request')
+        url = obj.photo.url
+        return request.build_absolute_uri(url) if request else url
 
 
 class FichierSerializer(serializers.ModelSerializer):
@@ -110,15 +129,23 @@ class PermissionSerializer(serializers.ModelSerializer):
 class EmployeAvatarSerializer(serializers.ModelSerializer):
     initials = serializers.SerializerMethodField()
     email = serializers.EmailField(source='user.email', read_only=True)
+    photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Employe
-        fields = ('id', 'nom', 'prenom', 'avatar', 'initials', 'email')
+        fields = ('id', 'nom', 'prenom', 'avatar', 'photo_url', 'initials', 'email')
 
     def get_initials(self, obj):
         p = (obj.prenom or '')[:1].upper()
         n = (obj.nom or '')[:1].upper()
         return (p + n) or '?'
+
+    def get_photo_url(self, obj):
+        if not obj.photo:
+            return None
+        request = self.context.get('request')
+        url = obj.photo.url
+        return request.build_absolute_uri(url) if request else url
 
 
 class DossierSerializer(serializers.ModelSerializer):

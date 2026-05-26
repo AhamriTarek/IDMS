@@ -4,6 +4,7 @@ import Sidebar from '../../components/Sidebar'
 import Navbar from '../../components/Navbar'
 import EmptyState from '../../components/EmptyState'
 import { useNotifications } from '../../context/NotificationContext'
+import { CheckCircle2, XCircle, AlertTriangle, Info, Bell } from 'lucide-react'
 
 function timeAgo(d) {
   if (!d) return ''
@@ -15,10 +16,10 @@ function timeAgo(d) {
 }
 
 const TYPE_CFG = {
-  success: { icon: '✅', color: '#065f46', bg: '#d1fae5', dot: '#10b981' },
-  error:   { icon: '❌', color: '#991b1b', bg: '#fee2e2', dot: '#ef4444' },
-  warning: { icon: '⚠️', color: '#92400e', bg: '#fef3c7', dot: '#f59e0b' },
-  info:    { icon: 'ℹ️', color: '#1e40af', bg: '#dbeafe', dot: '#3b82f6' },
+  success: { icon: CheckCircle2,  iconColor: '#065f46', color: '#065f46', bg: '#d1fae5', dot: '#10b981' },
+  error:   { icon: XCircle,       iconColor: '#991b1b', color: '#991b1b', bg: '#fee2e2', dot: '#ef4444' },
+  warning: { icon: AlertTriangle, iconColor: '#92400e', color: '#92400e', bg: '#fef3c7', dot: '#f59e0b' },
+  info:    { icon: Info,          iconColor: '#1e40af', color: '#1e40af', bg: '#dbeafe', dot: '#3b82f6' },
 }
 
 export default function EmployeeNotifications() {
@@ -50,7 +51,7 @@ export default function EmployeeNotifications() {
 
           {sorted.length === 0 ? (
             <div className="surface">
-              <EmptyState icon="🔔" title="Aucune notification" description="Vous serez notifié ici des réponses à vos soumissions." />
+              <EmptyState icon={Bell} title="Aucune notification" description="Vous serez notifié ici des réponses à vos soumissions." />
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -72,15 +73,21 @@ export default function EmployeeNotifications() {
                     onMouseEnter={e => { if (!n.lu) e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.1)' }}
                     onMouseLeave={e => { e.currentTarget.style.boxShadow = n.lu ? 'none' : '0 2px 8px rgba(0,0,0,0.06)' }}
                   >
-                    <div style={{ width: 42, height: 42, borderRadius: 12, background: cfg.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 19 }}>
-                      {cfg.icon}
+                    <div style={{ width: 42, height: 42, borderRadius: 12, background: cfg.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <cfg.icon size={20} color={cfg.iconColor} strokeWidth={2} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 4 }}>
-                        <div style={{ fontSize: 14, fontWeight: n.lu ? 500 : 700, color: 'var(--text-primary)' }}>{n.titre}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                        <p style={{
+                          margin: 0,
+                          fontSize: 14, lineHeight: 1.5,
+                          fontWeight: n.lu ? 500 : 600,
+                          color: 'var(--text-primary)',
+                        }}>
+                          {n.message}
+                        </p>
                         <span style={{ fontSize: 11, color: 'var(--text-tertiary)', whiteSpace: 'nowrap', flexShrink: 0 }}>{timeAgo(n.created_at)}</span>
                       </div>
-                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{n.message}</div>
                       {!n.lu && (
                         <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#1d4ed8', fontWeight: 600 }}>
                           <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#1d4ed8' }} />

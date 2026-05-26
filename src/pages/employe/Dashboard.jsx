@@ -8,6 +8,7 @@ import Sidebar from '../../components/Sidebar'
 import Navbar from '../../components/Navbar'
 import StatusBadge from '../../components/StatusBadge'
 import { employeAPI } from '../../services/employeAPI'
+import { Folder, Clock, CheckCircle2, Bell } from 'lucide-react'
 
 function timeAgo(d) {
   if (!d) return ''
@@ -19,7 +20,7 @@ function timeAgo(d) {
 }
 
 // FIX 1: StatCard accepts `loading` prop — shows '…' instead of premature 0
-function StatCard({ icon, label, value, color, to, delay = 0, loading = false }) {
+function StatCard({ icon: Icon, label, value, color, to, delay = 0, loading = false }) {
   const navigate = useNavigate()
   return (
     <motion.div
@@ -30,8 +31,8 @@ function StatCard({ icon, label, value, color, to, delay = 0, loading = false })
       onMouseEnter={e => { if (to) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.1)' } }}
       onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '' }}
     >
-      <div style={{ width: 46, height: 46, borderRadius: 13, background: color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 22 }}>
-        {icon}
+      <div style={{ width: 46, height: 46, borderRadius: 13, background: color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        {Icon && <Icon size={22} color={color} strokeWidth={2} />}
       </div>
       <div>
         <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.04em', color: 'var(--text-primary)', lineHeight: 1.1 }}>
@@ -92,7 +93,7 @@ export default function EmployeeDashboard() {
           {/* Welcome */}
           <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 28 }}>
             <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-primary)', margin: '0 0 4px' }}>
-              {greeting}, {displayName} 👋
+              {greeting}, {displayName}
             </h1>
             <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: 0 }}>
               {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
@@ -105,10 +106,10 @@ export default function EmployeeDashboard() {
               FIX: removed stale "Refusées" card — replaced with Notifications
                    so the grid remains balanced (4 cards, 4 columns). */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
-            <StatCard icon="📁" label="Mes Dossiers"  value={dossiers.length} color="#1d4ed8" to="/employe/dossiers"      delay={0}    loading={!dossiersReady} />
-            <StatCard icon="⏳" label="En Attente"    value={enAttente}       color="#d97706" to="/employe/soumissions"   delay={0.05} loading={loading} />
-            <StatCard icon="✅" label="Acceptées"     value={approuves}       color="#16a34a" to="/employe/soumissions"   delay={0.1}  loading={loading} />
-            <StatCard icon="🔔" label="Notifications" value={unreadCount}     color="#7c3aed" to="/employe/notifications" delay={0.15} loading={loading} />
+            <StatCard icon={Folder}       label="Mes Dossiers"  value={dossiers.length} color="#1d4ed8" to="/employe/dossiers"      delay={0}    loading={!dossiersReady} />
+            <StatCard icon={Clock}        label="En Attente"    value={enAttente}       color="#d97706" to="/employe/soumissions"   delay={0.05} loading={loading} />
+            <StatCard icon={CheckCircle2} label="Acceptées"     value={approuves}       color="#16a34a" to="/employe/soumissions"   delay={0.1}  loading={loading} />
+            <StatCard icon={Bell}         label="Notifications" value={unreadCount}     color="#7c3aed" to="/employe/notifications" delay={0.15} loading={loading} />
           </div>
 
           {/* Quick actions */}
@@ -123,7 +124,8 @@ export default function EmployeeDashboard() {
               </button>
               {unreadCount > 0 && (
                 <button className="btn-secondary" style={{ fontSize: 13 }} onClick={() => navigate('/employe/notifications')}>
-                  🔔 {unreadCount} notification(s)
+                  <Bell size={14} strokeWidth={2} style={{ verticalAlign: 'middle', marginRight: 5 }} />
+                  {unreadCount} notification(s)
                 </button>
               )}
             </div>
@@ -149,7 +151,9 @@ export default function EmployeeDashboard() {
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    <div style={{ width: 32, height: 32, borderRadius: 9, background: 'rgba(29,78,216,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 }}>📁</div>
+                    <div style={{ width: 32, height: 32, borderRadius: 9, background: 'rgba(29,78,216,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Folder size={16} color="#1d4ed8" strokeWidth={2} />
+                    </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.titre}</div>
                       {/* FIX 4: backend may return fichiers_count (int) or fichiers

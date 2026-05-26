@@ -11,6 +11,7 @@ const Comptes               = React.lazy(() => import('./pages/Comptes'))
 const AdminNotifications    = React.lazy(() => import('./pages/Notifications'))
 const AdminSoumissions      = React.lazy(() => import('./pages/admin/AdminSoumissions'))
 const GoogleCallback        = React.lazy(() => import('./pages/GoogleCallback'))
+const Profile               = React.lazy(() => import('./pages/Profile'))
 
 // Employee pages
 const EmployeeDashboard     = React.lazy(() => import('./pages/employe/Dashboard'))
@@ -108,6 +109,11 @@ export default function App() {
           } />
           <Route path="/employe/notifications" element={
             <ProtectedRoute requiredRole="employe"><EmployeeNotifications /></ProtectedRoute>
+          } />
+
+          {/* ── Shared profile page (admin + employe) ── */}
+          <Route path="/profile" element={
+            <ProtectedRoute><Profile /></ProtectedRoute>
           } />
 
           {/* ── Fallback ── */}

@@ -12,6 +12,59 @@ logger = logging.getLogger(__name__)
 
 # ── Text extraction ───────────────────────────────────────────────────────────
 
+IMAGE_EXTS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tiff', 'tif'}
+
+_IMAGE_MIME = {
+    'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+    'gif': 'image/gif', 'webp': 'image/webp', 'bmp': 'image/bmp',
+    'tiff': 'image/tiff', 'tif': 'image/tiff',
+}
+
+
+def _describe_image_via_vision(path: str) -> str:
+    """Send an image to Gemini Vision and return a French description."""
+    import time
+    from google import genai
+    from google.genai import types
+
+    ext  = path.rsplit('.', 1)[-1].lower()
+    mime = _IMAGE_MIME.get(ext, 'image/png')
+
+    try:
+        with open(path, 'rb') as fh:
+            image_bytes = fh.read()
+    except Exception as e:
+        logger.warning("Cannot read image %s: %s", path, e)
+        return ''
+
+    parts = [
+        types.Part.from_bytes(data=image_bytes, mime_type=mime),
+        ('Décris le contenu de cette image en français. '
+         'Identifie le type de document, les textes visibles, les éléments '
+         'graphiques et toute information pertinente. Sois précis et concis.'),
+    ]
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model=settings.GEMINI_MODEL, contents=parts,
+            )
+            text = response.text or ''
+            logger.info("Gemini vision described image %s: %d chars", path, len(text))
+            return text
+        except Exception as e:
+            msg = str(e)
+            if attempt < 2 and any(c in msg for c in ('503', '429', 'UNAVAILABLE')):
+                wait = 4 * (attempt + 1)
+                logger.warning("Vision attempt %d failed (%s), retrying in %ds…", attempt + 1, msg[:60], wait)
+                time.sleep(wait)
+            else:
+                logger.warning("Gemini vision failed for %s: %s", path, e)
+                return ''
+    return ''
+
+
 def _extract_pdf_via_vision(path: str) -> str:
     """Render PDF pages to images and transcribe via Gemini vision (no system deps).
     Retries up to 3 times on transient 503/429 errors."""
@@ -95,7 +148,7 @@ def _extract_pdf_text(path: str) -> str:
 
 
 def extract_text_from_file(fichier_path: str) -> str:
-    ext = fichier_path.split('.')[-1].lower()
+    ext = fichier_path.rsplit('.', 1)[-1].lower()
     text = ''
     try:
         if ext == 'pdf':
@@ -106,6 +159,8 @@ def extract_text_from_file(fichier_path: str) -> str:
         elif ext in ('txt', 'csv'):
             with open(fichier_path, 'r', encoding='utf-8', errors='ignore') as f:
                 text = f.read()
+        elif ext in IMAGE_EXTS:
+            text = _describe_image_via_vision(fichier_path)
     except Exception:
         text = ''
     return text[:8000]
@@ -127,13 +182,42 @@ def _parse_json(raw: str) -> dict:
 # ── Gemini client factory ─────────────────────────────────────────────────────
 
 def _generate(prompt: str) -> str:
+    import time
     from google import genai
+
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    response = client.models.generate_content(
-        model=settings.GEMINI_MODEL,
-        contents=prompt,
-    )
-    return response.text
+    model  = settings.GEMINI_MODEL
+
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+            )
+            return (response.text or '').strip()
+        except Exception as e:
+            err_str = str(e).lower()
+            if '429' in err_str or 'quota' in err_str:
+                # Rate limit — exponential backoff
+                if attempt < 2:
+                    wait = 2 ** attempt
+                    logger.warning("Gemini rate-limited (attempt %d), retrying in %ds…", attempt + 1, wait)
+                    time.sleep(wait)
+                else:
+                    raise
+            elif '503' in err_str or 'unavailable' in err_str:
+                # Transient — quick retry
+                logger.warning("Gemini transient error (attempt %d), retrying in 0.5s…", attempt + 1)
+                time.sleep(0.5)
+            else:
+                # Other errors — one fast retry then fail
+                if attempt == 0:
+                    logger.warning("Gemini error (attempt 1: %s), retrying in 0.3s…", str(e)[:80])
+                    time.sleep(0.3)
+                else:
+                    raise
+
+    raise RuntimeError("Gemini failed after 3 retries")
 
 
 # ── CarteIA upsert ────────────────────────────────────────────────────────────
@@ -158,11 +242,22 @@ class GeminiService:
 
     @staticmethod
     def analyser_fichier(fichier) -> dict:
-        """Generate ai_titre + ai_resume for a single file."""
-        full_path = os.path.join(settings.MEDIA_ROOT, fichier.fichier.name)
-        text = extract_text_from_file(full_path)
+        """Generate ai_titre + ai_resume for a single file. Always returns a non-empty resume."""
+        try:
+            full_path = os.path.join(settings.MEDIA_ROOT, fichier.fichier.name)
+            text = extract_text_from_file(full_path)
+        except Exception as exc:
+            logger.exception("extract_text_from_file failed for %s: %s", fichier.nom, exc)
+            text = ''
+
         if not text:
-            return {'ai_titre': fichier.nom, 'ai_resume': ''}
+            # Image vision failed OR unsupported extension OR empty file
+            return {
+                'ai_titre':  fichier.nom,
+                'ai_resume': f'[Fichier: {fichier.nom}] (contenu non extractible)',
+            }
+
+        text = text[:6000]  # hard cap before prompting Gemini
 
         prompt = f"""Analyse ce document et retourne UNIQUEMENT un objet JSON valide:
 {{
@@ -178,11 +273,14 @@ Contenu du document:
             data = _parse_json(raw)
             return {
                 'ai_titre':  (data.get('titre') or fichier.nom)[:300],
-                'ai_resume': data.get('resume') or '',
+                'ai_resume': data.get('resume') or f'[{fichier.nom}]',
             }
         except Exception as exc:
-            logger.exception("analyser_fichier error: %s", exc)
-            return {'ai_titre': fichier.nom, 'ai_resume': ''}
+            logger.exception("analyser_fichier Gemini error for %s: %s", fichier.nom, exc)
+            return {
+                'ai_titre':  fichier.nom,
+                'ai_resume': f'[{fichier.nom}] (analyse IA non disponible)',
+            }
 
     @staticmethod
     def resumer_dossier(dossier) -> dict:
@@ -212,12 +310,20 @@ Contenu du document:
                 content = f"[{f.ai_titre or f.nom}]\n{carte_analyse}"
 
             if not content:
-                # Last resort only — will be slow for scanned PDFs
+                # Last resort — slow for scanned PDFs, uses vision for images
                 full_path = os.path.join(settings.MEDIA_ROOT, f.fichier.name)
                 content = extract_text_from_file(full_path)
 
-            if content:
-                file_list.append({'nom': f.nom, 'contenu': content[:2000]})
+            # Always include the file; use a placeholder if content is still empty
+            # (e.g. vision API unavailable) so the filename appears in the summary
+            if not content:
+                ext = (f.fichier.name or '').rsplit('.', 1)[-1].lower()
+                if ext in IMAGE_EXTS:
+                    content = f"[Fichier image — contenu visuel: {f.nom}]"
+                else:
+                    content = f"[Fichier sans contenu textuel extractible: {f.nom}]"
+
+            file_list.append({'nom': f.nom, 'contenu': content[:2000]})
 
         if not file_list:
             return {'fichiers': [], 'synthese_globale': 'Aucun contenu disponible dans ce dossier.'}
@@ -275,6 +381,10 @@ Documents:
         for fichier in _Fichier.objects.filter(dossier=dossier):
             full_path = os.path.join(settings.MEDIA_ROOT, fichier.fichier.name)
             t = extract_text_from_file(full_path)
+            if not t:
+                ext = (fichier.fichier.name or '').rsplit('.', 1)[-1].lower()
+                if ext in IMAGE_EXTS:
+                    t = f"[Fichier image — contenu visuel: {fichier.nom}]"
             if t:
                 texts.append(f"[{fichier.nom}]\n{t}")
 
