@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
+import dj_database_url
 
 load_dotenv()
 
@@ -15,8 +16,13 @@ except ImportError:
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'fallback-secret-key-change-in-production')
-DEBUG      = os.environ.get('DEBUG', 'True') == 'True'
+DEBUG      = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes')
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
+
+# Render injects RENDER_EXTERNAL_HOSTNAME with the public hostname of the service
+RENDER_EXTERNAL_HOSTNAME = os.getenv('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -49,6 +55,7 @@ SITE_ID = 1
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'allauth.account.middleware.AccountMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -76,19 +83,35 @@ TEMPLATES = [{
 WSGI_APPLICATION = 'idms.wsgi.application'
 
 # ── Database ──────────────────────────────────────────────────────────────────
-_db_engine = os.environ.get('DB_ENGINE', 'django.db.backends.mysql')
-if _db_engine == 'django.db.backends.mysql':
-    DATABASES = {'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': os.environ.get('DB_NAME', 'idms'),
-        'USER': os.environ.get('DB_USER', 'root'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-        'HOST': os.environ.get('DB_HOST', 'localhost'),
-        'PORT': os.environ.get('DB_PORT', '3306'),
-        'OPTIONS': {'charset': 'utf8mb4', 'init_command': "SET sql_mode='STRICT_TRANS_TABLES'"},
-    }}
+# Supports both local dev (env-vars) and production (single DATABASE_URL for Supabase/Render).
+DATABASE_URL = os.getenv('DATABASE_URL')
+
+if DATABASE_URL:
+    # Production (Supabase / Render) — full PostgreSQL URL.
+    # conn_max_age=0 + DISABLE_SERVER_SIDE_CURSORS=True are required by
+    # Supabase's Transaction Pooler (pgBouncer transaction mode, port 6543):
+    # persistent connections and named server cursors don't survive between
+    # transactions in that mode.
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=0,
+            ssl_require=True,
+        )
+    }
+    DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
 else:
-    DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': BASE_DIR / 'db.sqlite3'}}
+    # Local development — driven by DB_ENGINE env var; defaults to PostgreSQL
+    DATABASES = {
+        'default': {
+            'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+            'NAME': os.getenv('DB_NAME', 'idms'),
+            'USER': os.getenv('DB_USER', 'postgres'),
+            'PASSWORD': os.getenv('DB_PASSWORD', ''),
+            'HOST': os.getenv('DB_HOST', 'localhost'),
+            'PORT': os.getenv('DB_PORT', '5432'),
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
@@ -107,6 +130,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ── Static & Media ────────────────────────────────────────────────────────────
 STATIC_URL  = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 USE_S3 = os.environ.get('USE_S3', 'False') == 'True'
 
@@ -131,7 +155,12 @@ else:
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
-CORS_ALLOWED_ORIGINS  = [FRONTEND_URL, 'http://localhost:3000', 'http://127.0.0.1:5173']
+CORS_ALLOWED_ORIGINS = [
+    o.strip() for o in os.getenv(
+        'CORS_ALLOWED_ORIGINS',
+        f'{FRONTEND_URL},http://localhost:3000,http://127.0.0.1:5173,http://localhost:5174'
+    ).split(',') if o.strip()
+]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
     'accept', 'accept-encoding', 'authorization', 'content-type',
@@ -252,3 +281,13 @@ AXES_ENABLED          = True
 # ── Security headers ──────────────────────────────────────────────────────────
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
+
+# ── Production hardening (active when DEBUG is off) ───────────────────────────
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER  = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT      = True
+    SESSION_COOKIE_SECURE    = True
+    CSRF_COOKIE_SECURE       = True
+    SECURE_HSTS_SECONDS      = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD      = True
