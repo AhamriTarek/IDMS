@@ -2,6 +2,7 @@ import os
 import json
 import re
 import logging
+from concurrent.futures import ThreadPoolExecutor
 import fitz          # PyMuPDF
 from docx import Document
 from django.conf import settings
@@ -375,18 +376,25 @@ Documents:
 
     @staticmethod
     def analyser_dossier(dossier) -> CarteIA_Dossier:
-        """Generate a CarteIA for the whole dossier."""
+        """Generate a CarteIA for the whole dossier.
+
+        Reuses each file's already-computed ai_resume to avoid a second,
+        expensive text-extraction / OCR pass. Falls back to direct extraction
+        only for files that have not been analysed yet.
+        """
         from core.models import Fichier as _Fichier
         texts = []
         for fichier in _Fichier.objects.filter(dossier=dossier):
-            full_path = os.path.join(settings.MEDIA_ROOT, fichier.fichier.name)
-            t = extract_text_from_file(full_path)
+            t = fichier.ai_resume or ''
             if not t:
-                ext = (fichier.fichier.name or '').rsplit('.', 1)[-1].lower()
-                if ext in IMAGE_EXTS:
-                    t = f"[Fichier image — contenu visuel: {fichier.nom}]"
+                full_path = os.path.join(settings.MEDIA_ROOT, fichier.fichier.name)
+                t = extract_text_from_file(full_path)
+                if not t:
+                    ext = (fichier.fichier.name or '').rsplit('.', 1)[-1].lower()
+                    if ext in IMAGE_EXTS:
+                        t = f"[Fichier image — contenu visuel: {fichier.nom}]"
             if t:
-                texts.append(f"[{fichier.nom}]\n{t}")
+                texts.append(f"[{fichier.ai_titre or fichier.nom}]\n{t}")
 
         combined = '\n\n'.join(texts) if texts else 'Aucun contenu textuel disponible.'
 
@@ -417,6 +425,86 @@ Contenu des documents:
             result = {'resume': '', 'mots_cles': [], 'analyse': '', 'entites': {}}
 
         return _upsert_carte(dossier, result)
+
+
+# ── Background orchestration ──────────────────────────────────────────────────
+
+def analyser_fichiers_en_parallele(fichiers, max_workers=4):
+    """Analyse the given files concurrently, filling ai_titre / ai_resume.
+
+    Only files still missing ai_resume are processed. Each Gemini call is
+    independent, so running them in parallel turns N sequential round-trips into
+    ceil(N / max_workers) waves — the main speed-up when a dossier has many files.
+    A failure on one file falls back to a placeholder so the pipeline never stalls.
+    """
+    from django.db import connection
+
+    pending = [f for f in fichiers if not f.ai_resume]
+    if not pending:
+        return
+
+    def _analyse_one(fichier):
+        try:
+            result = GeminiService.analyser_fichier(fichier)
+            fichier.ai_resume = result.get('ai_resume') or f'[{fichier.nom}]'
+            fichier.ai_titre  = result.get('ai_titre')  or fichier.nom
+        except Exception:
+            logger.exception("analyser_fichier failed for %s", fichier.nom)
+            fichier.ai_resume = f'[Fichier: {fichier.nom}]'
+            fichier.ai_titre  = fichier.nom
+        try:
+            fichier.save(update_fields=['ai_resume', 'ai_titre'])
+        finally:
+            # Each worker uses its own thread-local DB connection — release it
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(pending))) as executor:
+        list(executor.map(_analyse_one, pending))
+
+
+def run_full_analysis(dossier):
+    """Full AI pipeline for a dossier — safe to run in a background thread.
+
+      1. per-file analysis (parallel)  → ai_titre / ai_resume
+      2. global carte IA               → resume / mots_cles / analyse / entites
+      3. structured resume             → resume_structure (what "Résumer" reads)
+
+    Guarantees resume_structure is non-null so the frontend spinner always
+    resolves, even if individual AI calls fail.
+    """
+    import time
+    from core.models import Fichier as _Fichier
+
+    t0 = time.time()
+    fichiers = list(_Fichier.objects.filter(dossier=dossier))
+    logger.info("run_full_analysis: dossier=%s, %d file(s)", dossier.pk, len(fichiers))
+
+    analyser_fichiers_en_parallele(fichiers)
+
+    try:
+        GeminiService.analyser_dossier(dossier)
+    except Exception:
+        logger.exception("run_full_analysis: analyser_dossier failed (dossier=%s)", dossier.pk)
+
+    try:
+        GeminiService.resumer_dossier(dossier)  # persists resume_structure
+    except Exception:
+        logger.exception("run_full_analysis: resumer_dossier failed (dossier=%s)", dossier.pk)
+
+    # Guarantee resume_structure is populated even if the AI calls above failed
+    carte, _ = CarteIA_Dossier.objects.get_or_create(dossier=dossier)
+    if not carte.resume_structure:
+        logger.warning("run_full_analysis: resume_structure empty, writing fallback (dossier=%s)", dossier.pk)
+        carte.resume_structure = {
+            'synthese_globale': f"Dossier « {dossier.titre} » contient {len(fichiers)} fichier(s).",
+            'fichiers': [
+                {'nom': f.nom, 'points': [f.ai_resume or f'Fichier: {f.nom}']}
+                for f in fichiers
+            ],
+        }
+        carte.save(update_fields=['resume_structure'])
+
+    logger.info("run_full_analysis: dossier=%s done in %.2fs", dossier.pk, time.time() - t0)
 
 
 # ── Alias so existing task code keeps working ─────────────────────────────────

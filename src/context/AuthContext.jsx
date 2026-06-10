@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { flushSync } from 'react-dom'
 import api, { tokenStorage } from '../api/axios'
 
 const AuthContext = createContext(null)
@@ -24,13 +25,16 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  // FIX: login uses tokenStorage, attaches Bearer header, calls server logout
   const login = useCallback(async (identifier, password) => {
     const { data } = await api.post('/token/', { username: identifier, password })
     tokenStorage.setTokens(data.access, data.refresh)
     api.defaults.headers.common.Authorization = `Bearer ${data.access}`
-    return await fetchMe()
-  }, [fetchMe])
+    const { data: me } = await api.get('/me/')
+    // flushSync ensures the state update is committed before navigate() runs in
+    // the caller, preventing ProtectedRoute from seeing a stale null user.
+    flushSync(() => setUser(me))
+    return me
+  }, [setUser])
 
   // FIX: logout blacklists token on server
   const logout = useCallback(async () => {

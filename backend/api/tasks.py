@@ -1,6 +1,6 @@
 import logging
 from celery import shared_task
-from .services import GeminiService as GeminiService
+from .services import GeminiService as GeminiService, run_full_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -16,16 +16,9 @@ def analyser_dossier_task(self, dossier_id: int) -> dict:
         return {'error': f'Dossier {dossier_id} introuvable'}
 
     try:
-        # Per-file AI analysis first
-        for fichier in dossier.fichiers.all():
-            if not fichier.ai_titre and not fichier.ai_resume:
-                result = GeminiService.analyser_fichier(fichier)
-                fichier.ai_titre = result['ai_titre']
-                fichier.ai_resume = result['ai_resume']
-                fichier.save(update_fields=['ai_titre', 'ai_resume'])
-
-        # Global dossier carte IA
-        carte = GeminiService.analyser_dossier(dossier)
+        # Per-file analysis (parallel) + global carte + structured resume
+        run_full_analysis(dossier)
+        carte = dossier.carte_ia
         return {
             'id':         carte.id,
             'dossier_id': dossier_id,

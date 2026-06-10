@@ -1,3 +1,4 @@
+import logging
 from django.contrib.auth.models import User
 from django.db.models import Q
 from django.utils import timezone
@@ -308,22 +309,10 @@ class DossierViewSet(viewsets.ModelViewSet):
             task = analyser_dossier_task.delay(dossier.pk)
             return Response({'task_id': task.id, 'status': 'en_cours'}, status=status.HTTP_202_ACCEPTED)
         except Exception:
-            # Celery/Redis not available — run synchronously
+            # Celery/Redis not available — run the full pipeline in a background thread
             import threading
-            from .services import GeminiService
-            def run():
-                try:
-                    for fichier in Fichier.objects.filter(dossier=dossier):
-                        if not fichier.ai_titre and not fichier.ai_resume:
-                            r = GeminiService.analyser_fichier(fichier)
-                            fichier.ai_titre  = r['ai_titre']
-                            fichier.ai_resume = r['ai_resume']
-                            fichier.save(update_fields=['ai_titre', 'ai_resume'])
-                    GeminiService.analyser_dossier(dossier)
-                    GeminiService.resumer_dossier(dossier)  # saves resume_structure
-                except Exception:
-                    pass
-            threading.Thread(target=run, daemon=True).start()
+            from .services import run_full_analysis
+            threading.Thread(target=run_full_analysis, args=(dossier,), daemon=True).start()
             return Response({'task_id': None, 'status': 'en_cours_sync'}, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=True, methods=['post'], url_path='resumer')
@@ -381,7 +370,6 @@ class DossierViewSet(viewsets.ModelViewSet):
         files = request.FILES.getlist('fichiers')
         if not files:
             return Response({'error': 'Aucun fichier fourni'}, status=status.HTTP_400_BAD_REQUEST)
-        new_fichiers = []
         created = []
         for f in files:
             ext = f.name.split('.')[-1].lower()
@@ -392,25 +380,13 @@ class DossierViewSet(viewsets.ModelViewSet):
                 type_fichier=type_fichier, taille=f.size,
                 uploaded_by=request.user, status='confirme',
             )
-            new_fichiers.append(fichier)
             created.append(FichierSerializer(fichier).data)
         # Nullify resume_structure so polling detects when new analysis completes
         CarteIA_Dossier.objects.filter(dossier=dossier).update(resume_structure=None)
-        # Trigger full analysis in background
+        # Trigger full analysis in background (per-file analysis runs in parallel)
         import threading
-        from .services import GeminiService
-        def run():
-            try:
-                for fichier_obj in new_fichiers:
-                    r = GeminiService.analyser_fichier(fichier_obj)
-                    fichier_obj.ai_titre  = r['ai_titre']
-                    fichier_obj.ai_resume = r['ai_resume']
-                    fichier_obj.save(update_fields=['ai_titre', 'ai_resume'])
-                GeminiService.analyser_dossier(dossier)
-                GeminiService.resumer_dossier(dossier)  # saves resume_structure
-            except Exception:
-                pass
-        threading.Thread(target=run, daemon=True).start()
+        from .services import run_full_analysis
+        threading.Thread(target=run_full_analysis, args=(dossier,), daemon=True).start()
         return Response(created, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['get'], url_path='resume-data')
@@ -429,8 +405,7 @@ class DossierViewSet(viewsets.ModelViewSet):
     def retry_analysis(self, request, pk=None):
         """Manually retry AI analysis for a stuck dossier. Returns instantly; analysis runs in background."""
         import threading
-        import logging as _logging
-        _log = _logging.getLogger(__name__)
+        _log = logging.getLogger(__name__)
         dossier = self.get_object()
         _dossier_pk = dossier.pk
 
@@ -438,50 +413,13 @@ class DossierViewSet(viewsets.ModelViewSet):
         CarteIA_Dossier.objects.filter(dossier=dossier).update(resume_structure=None)
 
         def _retry():
-            from core.models import Dossier as _Dossier, Fichier as _Fichier
-            from .services import GeminiService as _GS
-            _log.info("[RETRY] START dossier=%s", _dossier_pk)
+            from core.models import Dossier as _Dossier
+            from .services import run_full_analysis
             try:
                 d = _Dossier.objects.get(pk=_dossier_pk)
-                carte, _c = CarteIA_Dossier.objects.get_or_create(dossier=d)
-                fichiers = list(_Fichier.objects.filter(dossier=d))
-                _log.info("[RETRY] %d files for dossier=%s", len(fichiers), d.pk)
-
-                for f in fichiers:
-                    if not f.ai_resume:
-                        try:
-                            r = _GS.analyser_fichier(f)
-                            f.ai_resume = r.get('ai_resume', '') or f'[{f.nom}]'
-                            f.ai_titre  = r.get('ai_titre',  f.nom)
-                            f.save(update_fields=['ai_resume', 'ai_titre'])
-                        except Exception as fe:
-                            _log.exception("[RETRY] file=%s failed: %s", f.nom, fe)
-                            f.ai_resume = f'[Fichier: {f.nom}]'
-                            f.save(update_fields=['ai_resume', 'ai_titre'])
-
-                try:
-                    _GS.analyser_dossier(d)
-                except Exception as ae:
-                    _log.exception("[RETRY] analyser_dossier failed: %s", ae)
-                try:
-                    _GS.resumer_dossier(d)
-                except Exception as re_:
-                    _log.exception("[RETRY] resumer_dossier failed: %s", re_)
-
-                carte.refresh_from_db()
-                if not carte.resume_structure:
-                    _log.warning("[RETRY] resume_structure still null — writing fallback")
-                    carte.resume_structure = {
-                        'synthese_globale': f"Dossier '{d.titre}' contient {len(fichiers)} fichier(s).",
-                        'fichiers': [
-                            {'nom': f.nom, 'points': [f.ai_resume or f'Fichier: {f.nom}']}
-                            for f in fichiers
-                        ],
-                    }
-                    carte.save(update_fields=['resume_structure'])
-                _log.info("[RETRY] COMPLETED dossier=%s", _dossier_pk)
-            except Exception as outer:
-                _log.exception("[RETRY] FATAL dossier=%s: %s", _dossier_pk, outer)
+                run_full_analysis(d)
+            except Exception:
+                _log.exception("[RETRY] FATAL dossier=%s", _dossier_pk)
 
         threading.Thread(target=_retry, daemon=True).start()
         return Response({'status': 'retry_started'})
@@ -522,8 +460,30 @@ class FichierViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user
         # Files uploaded by employees are staged as pending until admin accepts the submission
-        file_status = 'confirme' if is_admin(user) else 'en_attente'
-        serializer.save(uploaded_by=user, status=file_status)
+        is_employee_upload = not is_admin(user) and is_employe(user)
+        file_status = 'en_attente' if is_employee_upload else 'confirme'
+        fichier = serializer.save(uploaded_by=user, status=file_status)
+
+        # An employee upload IS a submission: create a pending SoumissionFichier and link
+        # the file so it appears under "En attente" for the employee and for admins to review.
+        if is_employee_upload:
+            employe = user.employe
+            soumission = SoumissionFichier.objects.create(
+                employe=employe,
+                dossier=fichier.dossier,
+                nom_fichier=fichier.nom,
+                status='en_attente',
+            )
+            fichier.soumission = soumission
+            fichier.save(update_fields=['soumission'])
+            for admin in Administrateur.objects.select_related('user').all():
+                Notification.objects.create(
+                    destinataire=admin.user,
+                    titre='Nouvelle soumission',
+                    message=f'📋 Nouveau fichier soumis par {employe.prenom} {employe.nom} — '
+                            f'{fichier.nom} (Dossier : {fichier.dossier.titre})',
+                    type_notif='info',
+                )
 
     def get_queryset(self):
         user = self.request.user
@@ -587,13 +547,18 @@ class SoumissionFichierViewSet(viewsets.ModelViewSet):
         employe = self.request.user.employe
         fichier = self.request.FILES.get('fichier')
         dossier = serializer.validated_data.get('dossier')
-        nom = fichier.name if fichier else (dossier.titre if dossier else 'Soumission')
-        soumission = serializer.save(employe=employe, nom_fichier=nom)
-        # Link any unbound pending files the employee uploaded to this submission
-        Fichier.objects.filter(
+        # Pending files in this dossier not yet attached to a submission. Uploads now
+        # auto-create their own submission, so this manual path only bundles leftovers.
+        pending = Fichier.objects.filter(
             dossier=dossier, uploaded_by=employe.user,
             status='en_attente', soumission__isnull=True
-        ).update(soumission=soumission)
+        )
+        if not fichier and not pending.exists():
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'detail': "Aucun fichier en attente à soumettre. Ajoutez d'abord un fichier."})
+        nom = fichier.name if fichier else (dossier.titre if dossier else 'Soumission')
+        soumission = serializer.save(employe=employe, nom_fichier=nom)
+        pending.update(soumission=soumission)
         # Notify every admin user about the new submission
         for admin in Administrateur.objects.select_related('user').all():
             Notification.objects.create(
@@ -626,94 +591,13 @@ class SoumissionFichierViewSet(viewsets.ModelViewSet):
         _dossier_pk = dossier.pk
 
         def _reanalyse_background():
-            import time
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-            from core.models import Dossier as _Dossier, Fichier as _Fichier
-            from .services import GeminiService as _GS
-            total_start = time.time()
-            _log.info("[AI BG] START dossier=%s", _dossier_pk)
+            from core.models import Dossier as _Dossier
+            from .services import run_full_analysis
             try:
                 d = _Dossier.objects.get(pk=_dossier_pk)
-                carte, created = CarteIA_Dossier.objects.get_or_create(dossier=d)
-                _log.info("[AI BG] CarteIA created=%s for dossier=%s", created, d.pk)
-                carte.resume_structure = None
-                carte.save(update_fields=['resume_structure'])
-
-                fichiers = list(_Fichier.objects.filter(dossier=d))
-                _log.info("[AI BG] Found %d files for dossier=%s", len(fichiers), d.pk)
-
-                # ── Parallel per-file analysis (same per-file output as before) ──
-                files_to_analyze = [f for f in fichiers if not f.ai_resume]
-                if files_to_analyze:
-                    t_files = time.time()
-                    _log.info("[AI BG] Analyzing %d files IN PARALLEL", len(files_to_analyze))
-
-                    def _analyze_one(f):
-                        try:
-                            r = _GS.analyser_fichier(f)
-                            f.ai_resume = r.get('ai_resume', '') or f'[{f.nom}]'
-                            f.ai_titre  = r.get('ai_titre',  '') or f.nom
-                            f.save(update_fields=['ai_resume', 'ai_titre'])
-                            return (f.nom, True, None)
-                        except Exception as fe:
-                            f.ai_resume = f'[Fichier: {f.nom}]'
-                            f.ai_titre  = f.nom
-                            f.save(update_fields=['ai_resume', 'ai_titre'])
-                            return (f.nom, False, str(fe))
-
-                    # 3 parallel workers — stays under Gemini's free-tier rate limit
-                    with ThreadPoolExecutor(max_workers=3) as executor:
-                        futures = [executor.submit(_analyze_one, f) for f in files_to_analyze]
-                        for future in as_completed(futures):
-                            name, ok, err = future.result()
-                            if ok:
-                                _log.info("[AI BG] OK file=%s", name)
-                            else:
-                                _log.warning("[AI BG] FAIL file=%s: %s", name, err)
-
-                    _log.info("[AI BG] File phase took %.2fs", time.time() - t_files)
-
-                try:
-                    _log.info("[AI BG] Calling analyser_dossier dossier=%s", d.pk)
-                    t1 = time.time()
-                    _GS.analyser_dossier(d)
-                    _log.info("[AI BG] analyser_dossier took %.2fs", time.time() - t1)
-                except Exception as ae:
-                    _log.exception("[AI BG] analyser_dossier FAILED: %s", ae)
-                    carte.refresh_from_db()
-                    if not carte.analyse:
-                        carte.analyse = f"Dossier contient {len(fichiers)} fichier(s)."
-                        carte.save(update_fields=['analyse'])
-
-                try:
-                    _log.info("[AI BG] Calling resumer_dossier dossier=%s", d.pk)
-                    t2 = time.time()
-                    result = _GS.resumer_dossier(d)
-                    _log.info("[AI BG] resumer_dossier took %.2fs (keys=%s)",
-                              time.time() - t2,
-                              list(result.keys()) if isinstance(result, dict) else 'none')
-                except Exception as re_:
-                    _log.exception("[AI BG] resumer_dossier FAILED: %s", re_)
-
-                # FINAL FALLBACK — guarantee resume_structure is not null
-                carte.refresh_from_db()
-                if not carte.resume_structure:
-                    _log.warning("[AI BG] resume_structure still null — writing fallback")
-                    carte.resume_structure = {
-                        'synthese_globale': f"Dossier '{d.titre}' contient {len(fichiers)} fichier(s).",
-                        'fichiers': [
-                            {
-                                'nom':     f.nom,
-                                'points':  [f.ai_resume or f'Fichier: {f.nom}'],
-                            } for f in fichiers
-                        ],
-                    }
-                    carte.save(update_fields=['resume_structure'])
-                    _log.info("[AI BG] Fallback resume_structure saved")
-
-                _log.info("[AI BG] COMPLETED dossier=%s | TOTAL %.2fs", d.pk, time.time() - total_start)
-            except Exception as outer:
-                _log.exception("[AI BG] FATAL dossier=%s: %s", _dossier_pk, outer)
+                run_full_analysis(d)
+            except Exception:
+                _log.exception("[AI BG] FATAL dossier=%s", _dossier_pk)
                 try:
                     d = _Dossier.objects.get(pk=_dossier_pk)
                     carte, _ = CarteIA_Dossier.objects.get_or_create(dossier=d)
@@ -724,9 +608,8 @@ class SoumissionFichierViewSet(viewsets.ModelViewSet):
                             'error': True,
                         }
                         carte.save(update_fields=['resume_structure'])
-                        _log.info("[AI BG] Emergency fallback saved")
-                except Exception as emerg:
-                    _log.exception("[AI BG] Emergency fallback FAILED: %s", emerg)
+                except Exception:
+                    _log.exception("[AI BG] Emergency fallback FAILED dossier=%s", _dossier_pk)
 
         threading.Thread(target=_reanalyse_background, daemon=True).start()
         Notification.objects.create(

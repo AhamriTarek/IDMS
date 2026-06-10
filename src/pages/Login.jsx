@@ -180,7 +180,6 @@ export default function Login() {
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
-        console.log('[SPLINE DEBUG] Animation stopped (cleanup)')
       }
     }
   }, [])
@@ -189,30 +188,11 @@ export default function Login() {
     setSplineLoaded(true)
     splineRef.current = spline
 
-    console.log('═══════ SPLINE WAVE DEBUG ═══════')
-
     try {
       const g3 = spline.findObjectByName('Group 3')
       const g4 = spline.findObjectByName('Group 4')
       const g5 = spline.findObjectByName('Group 5')
       const g6 = spline.findObjectByName('Group 6')
-
-      const groups = { 'Group 3': g3, 'Group 4': g4, 'Group 5': g5, 'Group 6': g6 }
-
-      Object.entries(groups).forEach(([name, obj]) => {
-        if (!obj) {
-          console.error(`❌ ${name}: NOT FOUND`)
-          return
-        }
-        console.log(`📦 ${name}:`, {
-          type: obj.type,
-          hasPosition: !!obj.position,
-          y: obj.position?.y,
-          hasParent: !!obj.parent,
-          parentName: obj.parent?.name,
-          parentType: obj.parent?.type,
-        })
-      })
 
       // Walk up the parent chain until we find a node whose position.y is mutable.
       const findAnimatableTarget = (obj, depth = 0) => {
@@ -231,27 +211,16 @@ export default function Login() {
       }
 
       const targets = [g3, g4, g5, g6]
-        .map((g, i) => {
-          const t = findAnimatableTarget(g)
-          console.log(`🎯 File ${i + 1} animatable target:`, t?.name || 'NONE')
-          return t
-        })
+        .map((g) => findAnimatableTarget(g))
         .filter(Boolean)
 
-      if (targets.length === 0) {
-        console.error('❌ No animatable targets found!')
-        return
-      }
-
-      console.log(`✅ Found ${targets.length} animatable targets`)
+      if (targets.length === 0) return
 
       const originalY = targets.map(t => t.position.y)
-      console.log('Original Y positions:', originalY)
 
       // Files 1 & 3 → phase 0 ; Files 2 & 4 → phase π (opposite).
       const phases = [0, Math.PI, 0, Math.PI]
 
-      let frameCount = 0
       const animate = () => {
         const time = Date.now() / 1000
 
@@ -264,19 +233,12 @@ export default function Login() {
           }
         })
 
-        frameCount++
-        if (frameCount % 60 === 0) {
-          const positions = targets.map((t, i) => `F${i + 1}: ${t.position.y.toFixed(1)}`).join(' | ')
-          console.log(`[WAVE] Frame ${frameCount}:`, positions)
-        }
-
         animationFrameRef.current = requestAnimationFrame(animate)
       }
 
-      console.log('🚀 Starting wave animation...')
       animate()
     } catch (e) {
-      console.error('❌ Spline error:', e)
+      // Spline scene not compatible with wave animation — skip silently
     }
   }
 

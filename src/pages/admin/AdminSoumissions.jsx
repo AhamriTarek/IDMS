@@ -36,8 +36,8 @@ function RefuseModal({ sub, onClose, onDone }) {
     if (!raison.trim()) return
     setBusy(true)
     try {
-      await adminAPI.rejeter(sub.id, raison)
-      onDone()
+      const { data } = await adminAPI.rejeter(sub.id, raison)
+      onDone(data || { id: sub.id, status: 'rejete', rejection_reason: raison })
     } catch { /* ignore */ }
     finally { setBusy(false); onClose() }
   }
@@ -70,8 +70,8 @@ function RefuseModal({ sub, onClose, onDone }) {
           <div style={{ display: 'flex', gap: 10 }}>
             <button type="button" className="btn-secondary" onClick={onClose} style={{ flex: 1 }}>Annuler</button>
             <button type="submit" disabled={busy || !raison.trim()}
-              style={{ flex: 2, padding: '10px 0', borderRadius: 9, border: 'none', background: '#dc2626', color: 'white', fontWeight: 600, fontSize: 14, cursor: busy || !raison.trim() ? 'not-allowed' : 'pointer', opacity: busy || !raison.trim() ? 0.65 : 1 }}>
-              {busy ? 'Refus…' : <><XCircle size={14} strokeWidth={2} style={{ verticalAlign: 'middle', marginRight: 5 }} />Confirmer le refus</>}
+              style={{ flex: 2, padding: '10px 16px', borderRadius: 9, border: 'none', background: '#dc2626', color: 'white', fontWeight: 600, fontSize: 14, cursor: busy || !raison.trim() ? 'not-allowed' : 'pointer', opacity: busy || !raison.trim() ? 0.65 : 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, lineHeight: 1, boxShadow: '0 2px 6px rgba(220,38,38,0.25)' }}>
+              {busy ? 'Refus…' : <><XCircle size={15} strokeWidth={2.2} />Confirmer le refus</>}
             </button>
           </div>
         </form>
@@ -325,14 +325,16 @@ export default function AdminSoumissions() {
   useEffect(() => { load() }, [load])
 
   const approve = async (id) => {
-    await adminAPI.approuver(id)
-    // Update the local copy so panel status refreshes immediately
-    setSubs(prev => prev.map(s => s.id === id ? { ...s, status: 'approuve' } : s))
-    setDetailSub(prev => prev?.id === id ? { ...prev, status: 'approuve' } : prev)
+    const { data } = await adminAPI.approuver(id)
+    const updated = data && data.id ? data : { id, status: 'approuve' }
+    setSubs(prev => prev.map(s => s.id === id ? { ...s, ...updated } : s))
+    setDetailSub(prev => prev?.id === id ? null : prev)
   }
 
-  const handleRefuseDone = () => {
-    load()
+  const handleRefuseDone = (updated) => {
+    if (updated && updated.id) {
+      setSubs(prev => prev.map(s => s.id === updated.id ? { ...s, ...updated } : s))
+    }
     setDetailSub(null)
   }
 
