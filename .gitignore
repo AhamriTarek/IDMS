@@ -36,3 +36,6 @@ backend/server.log.err
 # IDE
 .vscode/
 .idea/
+
+# Local Netlify folder
+.netlify

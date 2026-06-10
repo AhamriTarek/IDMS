@@ -32,6 +32,8 @@ if RAILWAY_PUBLIC_DOMAIN:
 CSRF_TRUSTED_ORIGINS = [
     f'https://{h}' for h in (RENDER_EXTERNAL_HOSTNAME, RAILWAY_PUBLIC_DOMAIN) if h
 ]
+# Extra trusted origins (e.g. the Netlify frontend) via env
+CSRF_TRUSTED_ORIGINS += [o.strip() for o in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if o.strip()]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -182,6 +184,8 @@ CORS_ALLOWED_ORIGINS = [
     ).split(',') if o.strip()
 ]
 CORS_ALLOW_CREDENTIALS = True
+# Regex origins — Netlify draft deploys get per-deploy subdomains
+CORS_ALLOWED_ORIGIN_REGEXES = [r.strip() for r in os.getenv('CORS_ALLOWED_ORIGIN_REGEXES', '').split(',') if r.strip()]
 CORS_ALLOW_HEADERS = [
     'accept', 'accept-encoding', 'authorization', 'content-type',
     'dnt', 'origin', 'user-agent', 'x-csrftoken', 'x-requested-with',
