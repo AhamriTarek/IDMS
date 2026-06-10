@@ -227,7 +227,7 @@ SOCIALACCOUNT_AUTO_SIGNUP                    = True
 SOCIALACCOUNT_EMAIL_AUTHENTICATION           = True
 SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 SOCIALACCOUNT_ADAPTER                        = 'auth_app.adapters.CustomSocialAccountAdapter'
-ACCOUNT_DEFAULT_HTTP_PROTOCOL   = 'http'
+ACCOUNT_DEFAULT_HTTP_PROTOCOL   = 'http' if DEBUG else 'https'
 LOGIN_REDIRECT_URL              = '/auth/jwt-redirect/'  # after allauth success → generate JWT
 
 SOCIALACCOUNT_PROVIDERS = {
