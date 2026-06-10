@@ -8,12 +8,17 @@ dist
 backend/.env
 
 # Python
+venv/
+backend/venv/
 __pycache__/
 backend/__pycache__/
 backend/**/__pycache__/
 backend/**/*.pyc
 *.pyc
 *.pyo
+
+# Database dumps (contain real data — never commit or upload)
+idms_dump.sql
 
 # Django
 *.sqlite3

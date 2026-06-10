@@ -24,6 +24,15 @@ RENDER_EXTERNAL_HOSTNAME = os.getenv('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
+# Railway injects RAILWAY_PUBLIC_DOMAIN with the public hostname of the service
+RAILWAY_PUBLIC_DOMAIN = os.getenv('RAILWAY_PUBLIC_DOMAIN')
+if RAILWAY_PUBLIC_DOMAIN:
+    ALLOWED_HOSTS.append(RAILWAY_PUBLIC_DOMAIN)
+
+CSRF_TRUSTED_ORIGINS = [
+    f'https://{h}' for h in (RENDER_EXTERNAL_HOSTNAME, RAILWAY_PUBLIC_DOMAIN) if h
+]
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -86,7 +95,7 @@ WSGI_APPLICATION = 'idms.wsgi.application'
 # Supports both local dev (env-vars) and production (single DATABASE_URL for Supabase/Render).
 DATABASE_URL = os.getenv('DATABASE_URL')
 
-if DATABASE_URL:
+if DATABASE_URL and DATABASE_URL.startswith(('postgres://', 'postgresql://')):
     # Production (Supabase / Render) — full PostgreSQL URL.
     # conn_max_age=0 + DISABLE_SERVER_SIDE_CURSORS=True are required by
     # Supabase's Transaction Pooler (pgBouncer transaction mode, port 6543):
@@ -100,6 +109,17 @@ if DATABASE_URL:
         )
     }
     DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
+elif DATABASE_URL:
+    # Production (Railway MySQL) — mysql:// URL. ssl_require/sslmode is a
+    # Postgres-only option, so it must not be passed here.
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=60,
+        )
+    }
+    if DATABASES['default']['ENGINE'] == 'django.db.backends.mysql':
+        DATABASES['default'].setdefault('OPTIONS', {})['charset'] = 'utf8mb4'
 else:
     # Local development — driven by DB_ENGINE env var; defaults to PostgreSQL
     DATABASES = {
@@ -242,6 +262,11 @@ CELERY_RESULT_SERIALIZER  = 'json'
 CELERY_TIMEZONE           = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT    = 300  # 5 min hard limit per task
+
+# Run tasks synchronously in the web process when no Redis/worker is available
+# (single-service deployments, e.g. Railway free plan).
+CELERY_TASK_ALWAYS_EAGER = os.getenv('CELERY_TASK_ALWAYS_EAGER', 'False').lower() in ('true', '1', 'yes')
+CELERY_TASK_EAGER_PROPAGATES = CELERY_TASK_ALWAYS_EAGER
 
 def _make_cache():
     import socket

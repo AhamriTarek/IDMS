@@ -15,6 +15,9 @@ requests>=2.31
 psycopg2-binary==2.9.10
 dj-database-url==2.3.0
 
+# Production database (MySQL / Railway) — pure-Python driver, no C build needed
+pymysql>=1.1
+
 # Production server
 gunicorn==23.0.0
 
