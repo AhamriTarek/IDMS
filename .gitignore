@@ -25,6 +25,9 @@ idms_dump.sql
 backend/staticfiles/
 backend/media/
 
+# Diagnostic scratch files
+_diag2.txt
+
 # Logs (per-session noise, never commit)
 backend/server.log
 backend/server.log.err
